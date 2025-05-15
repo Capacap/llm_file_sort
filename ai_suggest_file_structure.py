@@ -2,11 +2,37 @@ import os
 from textwrap import dedent
 from litellm import completion
 from file_structure_to_json import get_file_structure_string
+import json
+import sys
+
+# Custom exception for missing files
+class MissingFilesError(Exception):
+    def __init__(self, missing_files):
+        self.missing_files = missing_files
+        message = f"{len(missing_files)} files missing from proposed structure"
+        super().__init__(message)
 
 api_key = os.getenv("OPENAI_API_KEY")
 model = "gpt-4.1-nano"
 
 file_structure = get_file_structure_string("testing_structure")
+
+# Extract all file paths from original structure
+def extract_files(structure, current_path="", files=None):
+    if files is None:
+        files = set()
+    
+    if isinstance(structure, dict):
+        for name, contents in structure.items():
+            path = f"{current_path}/{name}" if current_path else name
+            if isinstance(contents, dict):
+                extract_files(contents, path, files)
+            else:
+                files.add(path)
+    return files
+
+original_files = extract_files(json.loads(file_structure))
+
 instructions = dedent(f"""
 <task>
 Analyze the provided file structure and suggest a more logical organization.
@@ -49,10 +75,33 @@ response = completion(
 print("=== ASSISTANT MESSAGE ===")
 print(response.choices[0].message.content)
 
-# Optional: Parse JSON response if needed for further processing
-# import json
-# try:
-#     parsed_structure = json.loads(response.choices[0].message.content)
-#     # Use parsed_structure for further operations
-# except json.JSONDecodeError:
-#     print("Warning: Response was not valid JSON")
+# Validate JSON response
+try:
+    print("\n=== VALIDATION ===")
+
+    # Parse the response to validate JSON
+    parsed_structure = json.loads(response.choices[0].message.content)
+    print("✓ Valid JSON structure received")
+    
+    # Validate all files are present in new structure
+    proposed_files = extract_files(parsed_structure)
+    missing_files = original_files - proposed_files
+    
+    # If there are missing files, raise an error
+    if missing_files:
+        raise MissingFilesError(missing_files)
+    else:
+        print("✓ All original files present in new structure")
+    
+except json.JSONDecodeError as e:
+    print("\n=== JSON DECODE ERROR ===")
+    print(f"✗ Invalid JSON response: {str(e)}")
+    print(f"Error at line {e.lineno}, column {e.colno}")
+    sys.exit(1)  # Exit with error code
+    
+except MissingFilesError as e:
+    print("\n=== MISSING FILES ERROR ===")
+    print(f"✗ {str(e)}:")
+    for file in sorted(e.missing_files):
+        print(f"  - {file}")
+    sys.exit(2)  # Different error code for missing files
