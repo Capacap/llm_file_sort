@@ -1,7 +1,7 @@
 import os
 import json
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 
 def get_file_info(path: Path) -> Dict[str, Any]:
@@ -46,15 +46,35 @@ def dir_to_json(root_path: str) -> Dict[str, Any]:
     return _build_tree(root)
 
 
-def get_file_structure(path: str) -> Dict[str, Any]:
+def get_file_structure_json(path: str) -> Dict[str, Any]:
     return dir_to_json(path)
 
-def get_file_structure_string(path: str) -> Dict[str, Any]:
-    return json.dumps(dir_to_json(path), indent=2)
+def extract_files_from_structure_json(structure: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Extract all files from a file structure dictionary.
+    
+    Args:
+        structure: Dictionary created by get_file_structure
+        
+    Returns:
+        List of file dictionaries
+    """
+    files = []
+    stack = [structure]
+    
+    while stack:
+        node = stack.pop()
+        if node["type"] == "file":
+            files.append(node)
+        elif node["type"] == "directory":
+            for item in node["contents"]:
+                stack.append(item)
+    
+    return files
+
 
 if __name__ == "__main__":
     try:
-        result = get_file_structure("testing_structure")
+        result = get_file_structure_json("testing_structure")
         json_str = json.dumps(result, indent=2)
         print(json_str)
     except (FileNotFoundError, NotADirectoryError) as e:

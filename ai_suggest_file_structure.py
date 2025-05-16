@@ -1,9 +1,9 @@
 import os
+import sys
+import json
 from textwrap import dedent
 from litellm import completion
-from file_structure_to_json import get_file_structure_string
-import json
-import sys
+from file_structure_to_json import get_file_structure_json, extract_files_from_structure_json
 
 # Custom exception for missing files
 class MissingFilesError(Exception):
@@ -12,27 +12,15 @@ class MissingFilesError(Exception):
         message = f"{len(missing_files)} files missing from proposed structure"
         super().__init__(message)
 
+# Get the API key and select model
 api_key = os.getenv("OPENAI_API_KEY")
 model = "gpt-4.1-nano"
 
-file_structure = get_file_structure_string("testing_structure")
+# Get the files andfile structure
+file_structure = get_file_structure_json("testing_structure")
+files_in_structure = extract_files_from_structure_json(file_structure)
 
-# Extract all file paths from original structure
-def extract_files(structure, current_path="", files=None):
-    if files is None:
-        files = set()
-    
-    if isinstance(structure, dict):
-        for name, contents in structure.items():
-            path = f"{current_path}/{name}" if current_path else name
-            if isinstance(contents, dict):
-                extract_files(contents, path, files)
-            else:
-                files.add(path)
-    return files
-
-original_files = extract_files(json.loads(file_structure))
-
+# Define the instructions for the AI
 instructions = dedent(f"""
 <task>
 Analyze the provided file structure and suggest a more logical organization.
@@ -47,7 +35,7 @@ Analyze the provided file structure and suggest a more logical organization.
 </requirements>
 
 <input_structure>
-{file_structure}
+{json.dumps(file_structure, indent=2)}
 </input_structure>
 
 <output_format>
@@ -56,13 +44,19 @@ Use the same schema as the input structure but with your reorganized hierarchy.
 </output_format>
 """)
 
+# Define the user message
 user_message = {
   "role": "user",
   "content": instructions
 }
 
+# Print the user message
 print("=== USER MESSAGE ===")
 print(user_message["content"])
+
+# Print the original files
+print("=== ORIGINAL FILES ===")
+print(files_in_structure)
 
 response = completion(
   model=model,
@@ -84,14 +78,19 @@ try:
     print("✓ Valid JSON structure received")
     
     # Validate all files are present in new structure
-    proposed_files = extract_files(parsed_structure)
-    missing_files = original_files - proposed_files
+    files_in_new_structure = extract_files_from_structure_json(parsed_structure)
+
+    # Count the number of missing files
+    missing_count = 0
+    for file in files_in_structure:
+        if file not in files_in_new_structure:
+            missing_count += 1
     
     # If there are missing files, raise an error
-    if missing_files:
-        raise MissingFilesError(missing_files)
+    if missing_count > 0:
+        raise MissingFilesError(missing_count)
     else:
-        print("✓ All original files present in new structure")
+        print(f"✓ All {len(files_in_structure)} original files present in new structure")
     
 except json.JSONDecodeError as e:
     print("\n=== JSON DECODE ERROR ===")
