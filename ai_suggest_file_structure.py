@@ -74,15 +74,26 @@ def main():
     instructions = dedent(f"""
     <task>
     Analyze the provided files and suggest a more logical structure that improves organization and maintainability.
+    The files may not have descriptive or consistent naming patterns.
     </task>
 
     <requirements>
     1. Group related files together based on functionality, purpose, or domain
-    2. Place configuration files in appropriate locations
-    3. Separate code from assets, documentation, and data
-    4. Create a hierarchy that improves discoverability and maintainability
-    5. If no clear logical grouping exists, organize by file type or chronology
+    2. When file names are non-descriptive, analyze file types, timestamps, and potential relationships
+    3. Place configuration files in appropriate locations (e.g., config/, settings/)
+    4. Separate code from assets, documentation, and data
+    5. Create a hierarchy that improves discoverability and maintainability
+    6. Organize by file type for utility scripts, media files, and documentation
+    7. Consider chronological organization for version-controlled or time-sensitive content
     </requirements>
+
+    <organization_strategies>
+    Priority order (use the first strategy that applies):
+    1. Domain/functionality grouping (e.g., authentication, database, UI components)
+    2. File purpose grouping (e.g., configs, tests, documentation, media)
+    3. File type grouping (e.g., images/, documents/, scripts/)
+    4. Chronological grouping (for versioned files or when other strategies don't apply)
+    </organization_strategies>
 
     <input_files>
     {formatted_files_listing}
@@ -92,13 +103,19 @@ def main():
     Return a valid JSON object with:
     - Keys: original file paths
     - Values: suggested new file paths
+    Example:
+    {{
+      "old/path/file.txt": "new/structured/path/file.txt",
+      "random_name.py": "core/utilities/random_name.py"
+    }}
     </output_format>
 
     <constraints>
     - Maintain original filenames
-    - Don't suggest unnecessary nesting
+    - Don't suggest unnecessary nesting (max 3-4 levels deep)
     - Group logically related files in the same directory
     - The root directory of the proposed structure should be the same as the original structure
+    - Consider ease of navigation and maintainability in your structure
     </constraints>
     """)
 
@@ -148,6 +165,12 @@ def main():
         print("\n=== FILE MAPPING ===")
         for original_file, new_file in parsed_structure.items():
             print(f"{original_file} -> {new_file}")
+        
+        # Save the validated JSON response to a file
+        output_file = "proposed_file_structure.json"
+        with open(output_file, "w") as f:
+            json.dump(parsed_structure, f, indent=2)
+        print(f"\n✓ Saved proposed structure to {output_file}")
         
     except json.JSONDecodeError as e:
         print("\n=== JSON DECODE ERROR ===")
