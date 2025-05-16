@@ -3,7 +3,7 @@ import sys
 import json
 from textwrap import dedent
 from litellm import completion
-from file_structure_to_json import get_file_structure_json, extract_files_from_structure_json
+from file_structure_to_json import get_files
 
 # Custom exception for missing files
 class MissingFilesError(Exception):
@@ -12,18 +12,32 @@ class MissingFilesError(Exception):
         message = f"{len(missing_files)} files missing from proposed structure"
         super().__init__(message)
 
+# Function to format files for AI instructions
+def format_files_for_ai(files):
+    result = []
+    
+    for file in sorted(files, key=lambda x: x["path"]):
+        file_info = {
+            "path": file["path"],
+            "size": file["size"],
+            "type": file["extension"].lstrip(".")
+        }
+        result.append(file_info)
+    
+    return json.dumps(result, indent=2)
+
 # Get the API key and select model
 api_key = os.getenv("OPENAI_API_KEY")
 model = "gpt-4.1-nano"
 
-# Get the files andfile structure
-file_structure = get_file_structure_json("testing_structure")
-files_in_structure = extract_files_from_structure_json(file_structure)
+# Get the files and file structure
+files = get_files("testing_structure")
+formatted_files_listing = format_files_for_ai(files)
 
 # Define the instructions for the AI
 instructions = dedent(f"""
 <task>
-Analyze the provided file structure and suggest a more logical organization.
+Analyze the provided files and suggest a more logical structure that improves organization and maintainability.
 </task>
 
 <requirements>
@@ -34,14 +48,22 @@ Analyze the provided file structure and suggest a more logical organization.
 5. If no clear logical grouping exists, organize by file type or chronology
 </requirements>
 
-<input_structure>
-{json.dumps(file_structure, indent=2)}
-</input_structure>
+<input_files>
+{formatted_files_listing}
+</input_files>
 
 <output_format>
-Return only a valid JSON object representing the proposed file structure.
-Use the same schema as the input structure but with your reorganized hierarchy.
+Return a valid JSON object with:
+- Keys: original file paths
+- Values: suggested new file paths
 </output_format>
+
+<constraints>
+- Maintain original filenames
+- Don't suggest unnecessary nesting
+- Group logically related files in the same directory
+- The root directory of the proposed structure should be the same as the original structure
+</constraints>
 """)
 
 # Define the user message
@@ -56,7 +78,7 @@ print(user_message["content"])
 
 # Print the original files
 print("=== ORIGINAL FILES ===")
-print(files_in_structure)
+print(formatted_files_listing)
 
 response = completion(
   model=model,
@@ -76,21 +98,9 @@ try:
     # Parse the response to validate JSON
     parsed_structure = json.loads(response.choices[0].message.content)
     print("✓ Valid JSON structure received")
-    
-    # Validate all files are present in new structure
-    files_in_new_structure = extract_files_from_structure_json(parsed_structure)
 
-    # Count the number of missing files
-    missing_count = 0
-    for file in files_in_structure:
-        if file not in files_in_new_structure:
-            missing_count += 1
-    
-    # If there are missing files, raise an error
-    if missing_count > 0:
-        raise MissingFilesError(missing_count)
-    else:
-        print(f"✓ All {len(files_in_structure)} original files present in new structure")
+    for original_file, new_file in parsed_structure.items():
+        print(f"{original_file} -> {new_file}")
     
 except json.JSONDecodeError as e:
     print("\n=== JSON DECODE ERROR ===")

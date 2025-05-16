@@ -1,82 +1,43 @@
 import os
 import json
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
+import datetime
 
-
-def get_file_info(path: Path) -> Dict[str, Any]:
-    """Get basic file information."""
-    stat = path.stat()
+def get_file_info(file_path: str) -> Dict[str, Any]:
+    file_stat = os.stat(file_path)
+    path_obj = Path(file_path)
+    
     return {
-        "name": path.name,
-        "type": "file",
-        "size": stat.st_size,
-        "modified": stat.st_mtime
+        "filename": path_obj.name,
+        "path": file_path,
+        "size": file_stat.st_size,
+        "last_modified": datetime.datetime.fromtimestamp(file_stat.st_mtime).isoformat(),
+        "extension": path_obj.suffix
     }
 
-
-def get_dir_info(path: Path) -> Dict[str, Any]:
-    """Get directory information and its contents."""
-    return {
-        "name": path.name,
-        "type": "directory",
-        "contents": []
-    }
-
-
-def dir_to_json(root_path: str) -> Dict[str, Any]:
-    """Convert directory structure to JSON format."""
-    root = Path(root_path)
+def get_files(root_dir: str, max_depth: Optional[int] = None) -> List[Dict[str, Any]]:
+    file_info_list = []
+    root_dir = os.path.normpath(root_dir)
+    base_depth = root_dir.count(os.sep)
     
-    if not root.exists():
-        raise FileNotFoundError(f"Directory not found: {root_path}")
-    
-    if not root.is_dir():
-        raise NotADirectoryError(f"Path is not a directory: {root_path}")
-    
-    def _build_tree(path: Path) -> Dict[str, Any]:
-        if path.is_file():
-            return get_file_info(path)
+    for root, dirs, files in os.walk(root_dir):
+        current_depth = root.count(os.sep) - base_depth
         
-        dir_info = get_dir_info(path)
-        for item in path.iterdir():
-            dir_info["contents"].append(_build_tree(item))
-        return dir_info
+        if max_depth is not None and current_depth > max_depth:
+            # Clear dirs list to prevent further traversal in this branch
+            dirs.clear()
+            continue
+            
+        for file in files:
+            file_path = os.path.join(root, file)
+            file_info = get_file_info(file_path)
+            file_info_list.append(file_info)
     
-    return _build_tree(root)
-
-
-def get_file_structure_json(path: str) -> Dict[str, Any]:
-    return dir_to_json(path)
-
-def extract_files_from_structure_json(structure: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Extract all files from a file structure dictionary.
-    
-    Args:
-        structure: Dictionary created by get_file_structure
-        
-    Returns:
-        List of file dictionaries
-    """
-    files = []
-    stack = [structure]
-    
-    while stack:
-        node = stack.pop()
-        if node["type"] == "file":
-            files.append(node)
-        elif node["type"] == "directory":
-            for item in node["contents"]:
-                stack.append(item)
-    
-    return files
+    return file_info_list
 
 
 if __name__ == "__main__":
-    try:
-        result = get_file_structure_json("testing_structure")
-        json_str = json.dumps(result, indent=2)
-        print(json_str)
-    except (FileNotFoundError, NotADirectoryError) as e:
-        print(f"Error: {e}")
-        exit(1)
+    files = get_files("testing_structure")
+    for file in files:
+        print(file)
