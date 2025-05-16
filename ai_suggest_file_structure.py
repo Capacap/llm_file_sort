@@ -7,7 +7,6 @@ from textwrap import dedent
 from litellm import completion
 from pathlib import Path
 
-# Custom exception for missing files
 class MissingFilesError(Exception):
     def __init__(self, missing_files):
         self.missing_files = missing_files
@@ -46,7 +45,6 @@ def get_files(root_dir: str, max_depth: Optional[int] = None) -> List[Dict[str, 
     
     return file_info_list
 
-# Format input files for use in the AI instructions
 def format_files_for_ai(files):
     result = []
     
