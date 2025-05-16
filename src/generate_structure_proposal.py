@@ -33,40 +33,32 @@ def analyze_files_structure(api_key: str, model: str, formatted_files: str) -> s
     analysis_instructions = dedent(f"""
     <task>
     Analyze the provided files and suggest a logical structure that would improve organization and maintainability.
-    The files may not have descriptive or consistent naming patterns.
     </task>
 
     <requirements>
     1. Analyze file types, sizes, timestamps, and naming patterns
     2. Identify potential functional groups or domains
-    3. Consider appropriate organization strategies for these specific files
-    4. Provide reasoning for your suggested structure
+    3. Consider organization strategies (domain/functionality, file purpose, file type)
+    4. Provide brief reasoning for your suggested structure
     </requirements>
-
-    <organization_strategies>
-    Consider these approaches in your analysis:
-    1. Domain/functionality grouping (e.g., authentication, database, UI components)
-    2. File purpose grouping (e.g., configs, tests, documentation, media)
-    3. File type grouping (e.g., images/, documents/, scripts/)
-    4. Chronological grouping (for versioned files or when other strategies don't apply)
-    </organization_strategies>
 
     <input_files>
     {formatted_files}
     </input_files>
 
     <output_format>
-    Provide a detailed analysis with:
-    1. Summary of the file collection (types, patterns observed)
-    2. Identified groups or categories
-    3. Suggested directory structure with rationale
-    4. Any special considerations for specific files
+    Provide a concise analysis with:
+    1. Short summary of file collection (key types and patterns)
+    2. Core identified groups or categories
+    3. Suggested directory structure with minimal justification
     </output_format>
 
     <constraints>
     - Keep suggested structure practical (max 3-4 levels deep)
     - Maintain original filenames
     - Prioritize maintainability and ease of navigation
+    - Be concise and to the point - avoid unnecessary elaboration
+    - Focus on the most important observations and recommendations
     </constraints>
     """)
 
@@ -140,9 +132,8 @@ def create_file_mapping(api_key: str, model: str, formatted_files: str, analysis
     
     return json.loads(response.choices[0].message.content)
 
-def generate_structure_proposal(target_dir: str, api_key: str, model: str):
-    # Get the files and file structure
-    files = get_files(target_dir)
+def generate_structure_proposal(files, api_key: str, model: str):
+    # Format the files for AI processing
     formatted_files_listing = format_files_for_ai(files)
 
     print("=== ORIGINAL FILES ===")

@@ -98,23 +98,3 @@ def visualize_structure(file_paths):
     
     # Print just the tree without headers
     console.print(tree)
-
-def main():
-    json_path = "proposed_file_structure.json"
-    
-    try:
-        with open(json_path, "r") as f:
-            file_mapping = json.load(f)
-        
-        # Extract the file paths from the mapping
-        file_paths = list(file_mapping.values())
-        
-        # Visualize the structure
-        visualize_structure(file_paths)
-    except FileNotFoundError:
-        print(f"Error: Could not find {json_path}")
-    except json.JSONDecodeError:
-        print(f"Error: {json_path} is not a valid JSON file")
-
-if __name__ == "__main__":
-    main() 
