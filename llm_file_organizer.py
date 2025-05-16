@@ -1,14 +1,17 @@
 from src.read_files import get_files
-from visualize_structure import visualize_structure
+from src.generate_structure_proposal import generate_structure_proposal
+from src.visualize_structure import visualize_structure
 import json
+import os
 
 def main(directory_path: str):
+    api_key = os.getenv("OPENAI_API_KEY")
+    model = "gpt-4.1-nano"
+
+    file_mapping = generate_structure_proposal(directory_path, api_key, model)
+
     files = get_files(directory_path)
     old_filepaths = [file["path"] for file in files]
-
-    json_path = "data/proposed_file_structure.json"
-    with open(json_path, "r") as f:
-        file_mapping = json.load(f)
     new_filepaths = list(file_mapping.values())
 
     print("=== Original file structure ===")
@@ -25,4 +28,4 @@ if __name__ == "__main__":
     # args = parser.parse_args()
     # main(args.directory)
 
-    main("testing_structure")
+    main("data/testing")

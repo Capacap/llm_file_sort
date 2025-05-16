@@ -4,7 +4,7 @@ import json
 from typing import Dict
 from textwrap import dedent
 from litellm import completion
-from read_files import get_files
+from src.read_files import get_files
 
 class MissingFilesError(Exception):
     def __init__(self, missing_files):
@@ -140,13 +140,9 @@ def create_file_mapping(api_key: str, model: str, formatted_files: str, analysis
     
     return json.loads(response.choices[0].message.content)
 
-def main():
-    # Get the API key and select model
-    api_key = os.getenv("OPENAI_API_KEY")
-    model = "gpt-4.1-nano"
-
+def generate_structure_proposal(target_dir: str, api_key: str, model: str):
     # Get the files and file structure
-    files = get_files("testing_structure")
+    files = get_files(target_dir)
     formatted_files_listing = format_files_for_ai(files)
 
     print("=== ORIGINAL FILES ===")
@@ -180,10 +176,12 @@ def main():
             print(f"{original_file} -> {new_file}")
         
         # Save the validated JSON response to a file
-        output_file = "proposed_file_structure.json"
+        output_file = f"data/proposed_file_structure.json"
         with open(output_file, "w") as f:
             json.dump(file_mapping, f, indent=2)
         print(f"\n✓ Saved proposed structure to {output_file}")
+
+        return file_mapping
         
     except MissingFilesError as e:
         print("\n=== MISSING FILES ERROR ===")
@@ -191,6 +189,3 @@ def main():
         for file in sorted(e.missing_files):
             print(f"  - {file}")
         sys.exit(2)  # Different error code for missing files
-
-if __name__ == "__main__":
-    main()

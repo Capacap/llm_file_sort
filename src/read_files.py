@@ -30,7 +30,9 @@ def get_files(root_dir: str, max_depth: Optional[int] = None) -> List[Dict[str, 
             
         for file in files:
             file_path = os.path.join(root, file)
+            rel_path = os.path.relpath(file_path, root_dir)
             file_info = get_file_info(file_path)
+            file_info["path"] = rel_path
             file_info_list.append(file_info)
     
     return file_info_list
