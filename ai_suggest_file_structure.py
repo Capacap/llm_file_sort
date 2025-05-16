@@ -99,6 +99,19 @@ try:
     parsed_structure = json.loads(response.choices[0].message.content)
     print("✓ Valid JSON structure received")
 
+    # Check for missing files
+    original_files = [file["path"] for file in files]
+    proposed_files = parsed_structure.keys()
+    
+    missing_files = set(original_files) - set(proposed_files)
+    
+    if missing_files:
+        raise MissingFilesError(missing_files)
+    
+    print(f"✓ All {len(original_files)} files accounted for in proposed structure")
+    
+    # Print the mapping for review
+    print("\n=== FILE MAPPING ===")
     for original_file, new_file in parsed_structure.items():
         print(f"{original_file} -> {new_file}")
     
