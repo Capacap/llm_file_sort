@@ -374,7 +374,7 @@ def generate_testing_structure(output_dir, min_dirs=2, max_dirs=5, max_depth=3,
     return output_dir
 
 if __name__ == "__main__":
-    output_dir = "testing_structure"
+    output_dir = "data/testing"
     
     # Folder structure parameters
     min_dirs = 1      # Minimum number of folders at each level
