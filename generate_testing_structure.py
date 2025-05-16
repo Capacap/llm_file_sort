@@ -74,13 +74,13 @@ if __name__ == "__main__":
     output_dir = "testing_structure"
     
     # Folder structure parameters
-    min_dirs = 2      # Minimum number of folders at each level
-    max_dirs = 5      # Maximum number of folders at each level
+    min_dirs = 0      # Minimum number of folders at each level
+    max_dirs = 2      # Maximum number of folders at each level
     max_depth = 3     # Maximum folder nesting
     
     # File generation parameters
     min_files = 1     # Minimum files per directory
-    max_files = 5     # Maximum files per directory
+    max_files = 3     # Maximum files per directory
     min_lines = 1     # Minimum lines per file
     max_lines = 10    # Maximum lines per file
     min_chars = 10    # Minimum characters per line
