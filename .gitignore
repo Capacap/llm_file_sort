@@ -1,5 +1,3 @@
 venv
 __pycache__
-testing_structure
-testing_result
-proposed_file_structure.json
+data
