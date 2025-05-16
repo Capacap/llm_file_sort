@@ -4,18 +4,28 @@ from rich.tree import Tree
 from rich.console import Console
 from collections import deque
 
-def visualize_structure(file_paths):
-    """Create a minimal visualization of the directory structure using rich."""
-    console = Console()
+def visualize_structure(file_paths, console=None):
+    """
+    Create a minimal visualization of the directory structure using rich.
+    
+    Args:
+        file_paths: List of file paths to visualize
+        console: Optional rich console for output. If None, a new console will be created.
+    """
+    if console is None:
+        console = Console()
+    
     directories = {}
     
     # Process all files to build directory structure
     for file_path in file_paths:
+        # Normalize path separators
+        file_path = file_path.replace("\\", "/")
         path_parts = file_path.split("/")
         
-        # Build directory structure
+        # Build directory structure for all path segments
         current_path = ""
-        for i, part in enumerate(path_parts[:-1]):
+        for i, part in enumerate(path_parts[:-1]):  # All parts except the filename
             current_path = part if i == 0 else f"{current_path}/{part}"
             parent_path = "/".join(current_path.split("/")[:-1]) if "/" in current_path else ""
             
@@ -26,23 +36,28 @@ def visualize_structure(file_paths):
                     "files": []
                 }
         
-        # Add file to deepest directory
-        directory = "/".join(path_parts[:-1])
-        if directory in directories:
+        # Add file to its directory
+        directory = "/".join(path_parts[:-1]) if len(path_parts) > 1 else ""
+        if directory == "" and len(path_parts) == 1:
+            # Handle files in root directory
+            if "" not in directories:
+                directories[""] = {"name": "", "parent": "", "files": []}
+            directories[""]["files"].append(path_parts[0])
+        elif directory in directories:
             directories[directory]["files"].append(path_parts[-1])
     
-    # Find root directories (those with no parent)
+    # Find root directories (those with no parent or empty parent)
     root_dirs = sorted([p for p in directories if directories[p]["parent"] == ""])
     
-    if not root_dirs:
-        console.print("No directories found.")
+    if not root_dirs and not directories:
+        console.print("No directories or files found.")
         return
     
     # If there's only one root directory, use it as the tree root
     if len(root_dirs) == 1:
         root_path = root_dirs[0]
         root_info = directories[root_path]
-        tree = Tree(f"[cyan]{root_info['name']}/[/cyan]")
+        tree = Tree(f"[cyan]{root_info['name'] or '/'}/[/cyan]")
         
         # Process children of the root directory
         queue = deque([(tree, root_path)])
@@ -54,15 +69,12 @@ def visualize_structure(file_paths):
     else:
         # If multiple root directories, create a common root
         common_root = os.path.commonprefix(root_dirs)
-        if common_root:
-            tree = Tree(f"[cyan]{common_root}/[/cyan]")
-        else:
-            tree = Tree("[cyan]/[/cyan]")
+        tree = Tree(f"[cyan]/[/cyan]")
             
         # Process each root directory as a branch
         for root_path in root_dirs:
             root_info = directories[root_path]
-            display_name = root_info['name'] if common_root else root_path
+            display_name = root_info['name'] or root_path
             branch = tree.add(f"[cyan]{display_name}/[/cyan]")
             
             # Add files in root directory
@@ -72,6 +84,11 @@ def visualize_structure(file_paths):
             # Start queue with this branch
             queue = deque([(branch, root_path)])
             processed = set([root_path])
+    
+        # If there are files directly in the root with no directory
+        if "" in directories and directories[""]["files"]:
+            for filename in sorted(directories[""]["files"]):
+                tree.add(f"[green]{filename}[/green]")
     
     # Process remaining directories using BFS
     while queue:

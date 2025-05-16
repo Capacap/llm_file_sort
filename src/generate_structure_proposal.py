@@ -3,6 +3,7 @@ import json
 from typing import Dict, List, Any, Optional
 from textwrap import dedent
 from litellm import completion
+from rich.console import Console
 
 class MissingFilesError(Exception):
     def __init__(self, missing_files: set):
@@ -157,7 +158,7 @@ def create_file_mapping(api_key: str, model: str, formatted_files: str, analysis
     
     return json.loads(response.choices[0].message.content)
 
-def generate_structure_proposal(files: List[Dict[str, Any]], api_key: str, model: str, verbose: bool = False) -> Optional[Dict[str, str]]:
+def generate_structure_proposal(files: List[Dict[str, Any]], api_key: str, model: str, verbose: bool = False, console=None) -> Optional[Dict[str, str]]:
     """Generate a proposal for reorganizing file structure.
     
     Args:
@@ -165,6 +166,7 @@ def generate_structure_proposal(files: List[Dict[str, Any]], api_key: str, model
         api_key: API key for the LLM service
         model: LLM model identifier
         verbose: If True, print AI responses to stdout
+        console: Optional rich console for output. If None, a new console will be created.
         
     Returns:
         Dictionary mapping original file paths to proposed new paths, or None if validation fails
@@ -172,20 +174,23 @@ def generate_structure_proposal(files: List[Dict[str, Any]], api_key: str, model
     Raises:
         MissingFilesError: If any files are missing from the proposed structure
     """
+    if console is None:
+        console = Console()
+        
     # Format the files for AI processing
     formatted_files_listing = format_files_for_ai(files)
 
     # Step 1: Analyze file structure
     analysis = analyze_files_structure(api_key, model, formatted_files_listing)
     if verbose:
-        print("\n=== AI Structure Analysis ===")
-        print(analysis)
+        console.print("\n=== [bold blue]AI Structure Analysis[/bold blue] ===")
+        console.print(analysis)
     
     # Step 2: Create file mapping based on analysis
     file_mapping = create_file_mapping(api_key, model, formatted_files_listing, analysis)
     if verbose:
-        print("\n=== AI Proposed File Mapping ===")
-        print(json.dumps(file_mapping, indent=2))
+        console.print("\n=== [bold blue]AI Proposed File Mapping[/bold blue] ===")
+        console.print_json(json.dumps(file_mapping, indent=2))
     
     try:
         # Check for missing files

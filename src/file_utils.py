@@ -3,6 +3,7 @@ import os
 import datetime
 from typing import Dict, Any, List, Optional
 from pathlib import Path
+from rich.console import Console
 
 def get_file_info(file_path: str) -> Dict[str, Any]:
     file_stat = os.stat(file_path)
@@ -37,18 +38,22 @@ def get_files(root_dir: str, max_depth: Optional[int] = None) -> List[Dict[str, 
     
     return file_info_list
 
-def move_files(file_mapping):
+def move_files(file_mapping, console=None):
     """
     Move files according to the provided mapping and clean up empty source directories.
     
     Args:
         file_mapping: Dictionary where keys are source paths and values are destination paths
+        console: Optional rich console for output. If None, a new console will be created.
     """
+    if console is None:
+        console = Console()
+    
     source_dirs = set()
     
     for source, destination in file_mapping.items():
         if not os.path.exists(source):
-            print(f"Warning: Source file {source} does not exist. Skipping.")
+            console.print(f"[yellow]Warning:[/yellow] Source file {source} does not exist. Skipping.")
             continue
             
         source_dir = os.path.dirname(source)
@@ -61,9 +66,9 @@ def move_files(file_mapping):
             
         try:
             shutil.move(source, destination)
-            print(f"Moved: {source} → {destination}")
+            console.print(f"[green]Moved:[/green] {source} → {destination}")
         except Exception as e:
-            print(f"Error moving {source} to {destination}: {e}")
+            console.print(f"[red]Error moving[/red] {source} to {destination}: {e}")
     
     if source_dirs:
         dirs_to_check = sorted(source_dirs, key=lambda x: x.count(os.sep), reverse=True)
@@ -72,12 +77,12 @@ def move_files(file_mapping):
             try:
                 if os.path.exists(dir_path) and not os.listdir(dir_path):
                     os.rmdir(dir_path)
-                    print(f"Removed empty directory: {dir_path}")
+                    console.print(f"[red]Removed empty directory:[/red] {dir_path}")
                     
                     parent = os.path.dirname(dir_path)
                     while parent and os.path.exists(parent) and not os.listdir(parent):
                         os.rmdir(parent)
-                        print(f"Removed empty parent directory: {parent}")
+                        console.print(f"[red]Removed empty parent directory:[/red] {parent}")
                         parent = os.path.dirname(parent)
             except Exception as e:
-                print(f"Error removing directory {dir_path}: {e}") 
+                console.print(f"[red]Error removing directory[/red] {dir_path}: {e}") 
