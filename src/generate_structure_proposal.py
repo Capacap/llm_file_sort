@@ -157,13 +157,14 @@ def create_file_mapping(api_key: str, model: str, formatted_files: str, analysis
     
     return json.loads(response.choices[0].message.content)
 
-def generate_structure_proposal(files: List[Dict[str, Any]], api_key: str, model: str) -> Optional[Dict[str, str]]:
+def generate_structure_proposal(files: List[Dict[str, Any]], api_key: str, model: str, verbose: bool = False) -> Optional[Dict[str, str]]:
     """Generate a proposal for reorganizing file structure.
     
     Args:
         files: List of file dictionaries containing path, size, extension, and last_modified
         api_key: API key for the LLM service
         model: LLM model identifier
+        verbose: If True, print AI responses to stdout
         
     Returns:
         Dictionary mapping original file paths to proposed new paths, or None if validation fails
@@ -176,9 +177,15 @@ def generate_structure_proposal(files: List[Dict[str, Any]], api_key: str, model
 
     # Step 1: Analyze file structure
     analysis = analyze_files_structure(api_key, model, formatted_files_listing)
+    if verbose:
+        print("\n=== AI Structure Analysis ===")
+        print(analysis)
     
     # Step 2: Create file mapping based on analysis
     file_mapping = create_file_mapping(api_key, model, formatted_files_listing, analysis)
+    if verbose:
+        print("\n=== AI Proposed File Mapping ===")
+        print(json.dumps(file_mapping, indent=2))
     
     try:
         # Check for missing files
