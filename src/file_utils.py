@@ -1,5 +1,41 @@
 import shutil
 import os
+import datetime
+from typing import Dict, Any, List, Optional
+from pathlib import Path
+
+def get_file_info(file_path: str) -> Dict[str, Any]:
+    file_stat = os.stat(file_path)
+    path_obj = Path(file_path)
+    
+    return {
+        "filename": path_obj.name,
+        "path": file_path,
+        "size": file_stat.st_size,
+        "last_modified": datetime.datetime.fromtimestamp(file_stat.st_mtime).isoformat(),
+        "extension": path_obj.suffix
+    }
+
+def get_files(root_dir: str, max_depth: Optional[int] = None) -> List[Dict[str, Any]]:
+    file_info_list = []
+    root_dir = os.path.normpath(root_dir)
+    base_depth = root_dir.count(os.sep)
+    
+    for root, dirs, files in os.walk(root_dir):
+        current_depth = root.count(os.sep) - base_depth
+        
+        if max_depth is not None and current_depth > max_depth:
+            dirs.clear()
+            continue
+            
+        for file in files:
+            file_path = os.path.join(root, file)
+            rel_path = os.path.relpath(file_path, root_dir)
+            file_info = get_file_info(file_path)
+            file_info["path"] = rel_path
+            file_info_list.append(file_info)
+    
+    return file_info_list
 
 def move_files(file_mapping):
     """
@@ -8,7 +44,6 @@ def move_files(file_mapping):
     Args:
         file_mapping: Dictionary where keys are source paths and values are destination paths
     """
-    # Track source directories to check for cleanup later
     source_dirs = set()
     
     for source, destination in file_mapping.items():
@@ -16,41 +51,33 @@ def move_files(file_mapping):
             print(f"Warning: Source file {source} does not exist. Skipping.")
             continue
             
-        # Store source directory for later cleanup
         source_dir = os.path.dirname(source)
         if source_dir:
             source_dirs.add(source_dir)
             
-        # Create destination directory if it doesn't exist
         dest_dir = os.path.dirname(destination)
         if dest_dir and not os.path.exists(dest_dir):
             os.makedirs(dest_dir)
             
-        # Move the file
         try:
             shutil.move(source, destination)
             print(f"Moved: {source} → {destination}")
         except Exception as e:
             print(f"Error moving {source} to {destination}: {e}")
     
-    # Clean up empty source directories (deepest first)
     if source_dirs:
-        # Sort directories by depth (descending) to handle nested dirs properly
         dirs_to_check = sorted(source_dirs, key=lambda x: x.count(os.sep), reverse=True)
         
         for dir_path in dirs_to_check:
             try:
-                # Check if directory exists and is empty
                 if os.path.exists(dir_path) and not os.listdir(dir_path):
                     os.rmdir(dir_path)
                     print(f"Removed empty directory: {dir_path}")
                     
-                    # Check if parent directories are now empty
                     parent = os.path.dirname(dir_path)
                     while parent and os.path.exists(parent) and not os.listdir(parent):
                         os.rmdir(parent)
                         print(f"Removed empty parent directory: {parent}")
                         parent = os.path.dirname(parent)
             except Exception as e:
-                print(f"Error removing directory {dir_path}: {e}")
-
+                print(f"Error removing directory {dir_path}: {e}") 
