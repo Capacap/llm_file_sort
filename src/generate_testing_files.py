@@ -48,6 +48,112 @@ LOREM_PARAGRAPHS = [
     "Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur."
 ]
 
+# More realistic content by category
+REALISTIC_CONTENT = {
+    "meeting_notes": [
+        "Meeting started at 10:00 AM with all team members present.",
+        "Action items: Update project timeline, contact client about deliverables.",
+        "The team discussed the new feature requirements and assigned tasks.",
+        "Next sprint planning scheduled for Friday at 2:00 PM.",
+        "Budget concerns were raised regarding the server infrastructure costs.",
+        "Marketing team will provide updated materials by end of week.",
+        "Meeting concluded at 11:30 AM with agreement on next steps."
+    ],
+    "project_plans": [
+        "Project Timeline: Phase 1 to be completed by end of Q2.",
+        "Resources required: 2 developers, 1 designer, 1 QA specialist.",
+        "Budget allocation: $25,000 for initial development phase.",
+        "Key deliverables include user authentication system and admin dashboard.",
+        "Risks identified: API integration delays, potential security concerns.",
+        "Stakeholder review scheduled after completion of each milestone.",
+        "Success metrics: 98% uptime, <2s response time, 90% user satisfaction."
+    ],
+    "research_notes": [
+        "Preliminary findings suggest correlation between variables A and B.",
+        "Sample size of 250 participants provides statistically significant results.",
+        "Control group showed 15% less variation compared to test group.",
+        "Literature review reveals similar patterns in previous studies.",
+        "Methodology to be refined based on peer feedback.",
+        "Data collection will continue through Q3 with analysis in Q4.",
+        "Funding sources include grant #RF-2023-456 and department resources."
+    ],
+    "todo_lists": [
+        "Complete project proposal by Wednesday",
+        "Review pull requests for authentication module",
+        "Schedule team meeting for sprint planning",
+        "Update documentation for API endpoints",
+        "Fix bug in user registration form",
+        "Prepare presentation for client meeting",
+        "Test new feature on staging environment",
+        "Submit expense report for last month"
+    ],
+    "technical_docs": [
+        "System requires Python 3.8+ and PostgreSQL 13.2.",
+        "API endpoints use JWT authentication with 24-hour token expiration.",
+        "Database migrations should be run with '--no-input' flag in production.",
+        "Load balancer is configured with round-robin strategy.",
+        "Memory usage should not exceed 4GB under normal operation.",
+        "Logs are stored in /var/log/app/ with daily rotation.",
+        "Backup strategy: full backup weekly, incremental daily."
+    ],
+    "readme": [
+        "# Project Overview\nThis project aims to solve [specific problem].",
+        "## Installation\n```\npip install -r requirements.txt\n```",
+        "## Usage\n```python\nfrom package import main\nmain.run()\n```",
+        "## Configuration\nEdit config.json with your API credentials.",
+        "## Contributing\nPlease follow the contribution guidelines in CONTRIBUTING.md.",
+        "## License\nThis project is licensed under the MIT License."
+    ],
+    "logs": [
+        "[2023-10-15 08:12:34] INFO: Application started",
+        "[2023-10-15 08:12:35] DEBUG: Connecting to database at db.example.com",
+        "[2023-10-15 08:12:36] INFO: Successfully connected to database",
+        "[2023-10-15 08:13:45] WARN: High memory usage detected (78%)",
+        "[2023-10-15 08:14:22] ERROR: Failed to process request: Invalid token",
+        "[2023-10-15 08:14:30] INFO: User 'admin' logged in successfully",
+        "[2023-10-15 08:15:12] DEBUG: Cache hit ratio: 0.85"
+    ]
+}
+
+# Add personal notes category
+REALISTIC_CONTENT["personal_notes"] = [
+    "Remember to call Mom for her birthday next Tuesday.",
+    "Grocery list: milk, eggs, bread, apples, pasta, tomato sauce.",
+    "Gym schedule: Monday/Wednesday/Friday at 6:30 AM.",
+    "Ideas for weekend: hiking at Pine Mountain, movie night, try new restaurant.",
+    "Book recommendations from Alex: 'Project Hail Mary', 'Atomic Habits'.",
+    "Need to renew driver's license before end of month.",
+    "Password hint for work account: favorite vacation spot + year."
+]
+
+# Add report sections
+REALISTIC_CONTENT["report_sections"] = [
+    "Executive Summary:\nThe quarterly results exceeded expectations with a 12% increase in revenue.",
+    "Market Analysis:\nCompetitor activity has increased in the Southeast region.",
+    "Financial Overview:\nGross margin improved to 34%, up from 31% in previous quarter.",
+    "Risk Assessment:\nSupply chain disruptions pose moderate risk to Q4 deliverables.",
+    "Recommendations:\nIncrease marketing spend in emerging markets by 15%.",
+    "Conclusion:\nOverall performance indicates positive trajectory with cautious outlook.",
+    "Appendix A: Detailed sales figures by region and product category."
+]
+
+# Add emails
+REALISTIC_CONTENT["emails"] = [
+    "Subject: Project Update - Week 43\n\nHi team,\n\nWe're on track with the current sprint. Backend integration is complete and frontend updates are at 80%. Please submit your hours by Friday.\n\nThanks,\nProject Manager",
+    "Subject: Meeting Rescheduled\n\nDear all,\n\nThe budget review meeting has been moved to Thursday at 2 PM. Please confirm your attendance.\n\nBest regards,\nOffice Admin",
+    "Subject: New Feature Request\n\nHello Dev Team,\n\nThe client has requested a new dashboard feature. I've added the details to the task board. Priority is high.\n\nCheers,\nProduct Owner",
+    "Subject: System Maintenance Notice\n\nImportant: The system will be down for maintenance on Sunday from 2 AM to 5 AM. Please save all work before this time.\n\nIT Department"
+]
+
+# Add contracts/legal text
+REALISTIC_CONTENT["legal"] = [
+    "CONFIDENTIALITY AGREEMENT\n\nThis Agreement is entered into as of the Effective Date by and between the parties.",
+    "TERMS OF SERVICE\n\n1. ACCEPTANCE OF TERMS\nBy accessing or using the Service, you agree to be bound by these Terms.",
+    "PRIVACY POLICY\n\nWe collect personal information to provide and improve our services to you.",
+    "LICENSE AGREEMENT\n\nSubject to the terms and conditions of this Agreement, Company grants you a non-exclusive, non-transferable license.",
+    "WARRANTY DISCLAIMER\n\nTHE SOFTWARE IS PROVIDED \"AS IS\" WITHOUT WARRANTY OF ANY KIND."
+]
+
 def generate_random_name(length=8):
     """Generate a random alphanumeric name."""
     chars = string.ascii_letters + string.digits
@@ -103,10 +209,55 @@ def generate_realistic_file_name():
     
     return f"{prefix}{modifier}{extension}"
 
-def generate_text_content(min_lines, max_lines):
-    """Generate lorem ipsum text content."""
+def generate_text_content(min_lines, max_lines, file_name=""):
+    """Generate realistic text content based on file name and type."""
     num_paragraphs = random.randint(min_lines, max_lines)
-    return "\n\n".join(random.choice(LOREM_PARAGRAPHS) for _ in range(num_paragraphs))
+    
+    # Determine content type based on file name
+    content_type = "meeting_notes"  # Default
+    
+    file_name_lower = file_name.lower()
+    
+    if "readme" in file_name_lower:
+        content_type = "readme"
+    elif "todo" in file_name_lower or "task" in file_name_lower:
+        content_type = "todo_lists"
+    elif "meeting" in file_name_lower or "minutes" in file_name_lower:
+        content_type = "meeting_notes"
+    elif "log" in file_name_lower:
+        content_type = "logs"
+    elif "report" in file_name_lower or "summary" in file_name_lower:
+        content_type = "report_sections"
+    elif "plan" in file_name_lower or "project" in file_name_lower:
+        content_type = "project_plans"
+    elif "research" in file_name_lower or "study" in file_name_lower:
+        content_type = "research_notes"
+    elif "note" in file_name_lower or "personal" in file_name_lower:
+        content_type = "personal_notes"
+    elif "doc" in file_name_lower or "api" in file_name_lower or "tech" in file_name_lower:
+        content_type = "technical_docs"
+    elif "email" in file_name_lower or "message" in file_name_lower:
+        content_type = "emails"
+    elif "contract" in file_name_lower or "legal" in file_name_lower or "terms" in file_name_lower:
+        content_type = "legal"
+    else:
+        # If no specific match, use a random content type
+        content_type = random.choice(list(REALISTIC_CONTENT.keys()))
+    
+    # Get paragraphs from the selected content type
+    content_paragraphs = REALISTIC_CONTENT[content_type]
+    
+    # Handle case where we need more paragraphs than available
+    if num_paragraphs > len(content_paragraphs):
+        # Repeat with random selection to get enough paragraphs
+        selected_paragraphs = []
+        for _ in range(num_paragraphs):
+            selected_paragraphs.append(random.choice(content_paragraphs))
+    else:
+        # Randomly select paragraphs without repetition
+        selected_paragraphs = random.sample(content_paragraphs, num_paragraphs)
+    
+    return "\n\n".join(selected_paragraphs)
 
 def generate_json_content():
     """Generate a simple JSON document."""
@@ -290,10 +441,11 @@ def generate_sql_content():
 def generate_realistic_content(file_path, min_lines=3, max_lines=10):
     """Generate realistic content based on file extension."""
     ext = os.path.splitext(file_path)[1].lower()
+    file_name = os.path.basename(file_path)
     
     # Text files
     if ext in [".txt", ".md", ".log", ".doc", ".docx", ".pdf", ".rtf", ".odt"]:
-        return generate_text_content(min_lines, max_lines)
+        return generate_text_content(min_lines, max_lines, file_name)
     
     # Data formats
     elif ext == ".json":
@@ -321,7 +473,7 @@ def generate_realistic_content(file_path, min_lines=3, max_lines=10):
     
     # Default for any other file type
     else:
-        return generate_text_content(min_lines, max_lines)
+        return generate_text_content(min_lines, max_lines, file_name)
 
 def create_folder_structure(root_path, min_dirs=2, max_dirs=5, max_depth=3, current_depth=0):
     """Recursively create a folder structure with realistic subdirectories."""

@@ -27,7 +27,8 @@ def format_files_for_ai(files: List[Dict[str, Any]]) -> str:
             "path": file["path"],
             "size": file["size"],
             "type": file["extension"].lstrip("."),
-            "last_modified": file["last_modified"]
+            "last_modified": file["last_modified"],
+            "content_sample": file["content_sample"]
         }
         result.append(file_info)
     
