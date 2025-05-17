@@ -53,23 +53,32 @@ def visualize_structure(file_paths, console=None):
         console.print("No directories or files found.")
         return
     
+    # Create processing queue and set of processed directories
+    queue = deque()
+    processed = set()
+    
     # If there's only one root directory, use it as the tree root
     if len(root_dirs) == 1:
         root_path = root_dirs[0]
         root_info = directories[root_path]
         tree = Tree(f"[cyan]{root_info['name'] or '/'}/[/cyan]")
         
-        # Process children of the root directory
-        queue = deque([(tree, root_path)])
-        processed = set([root_path])
-        
         # Add files in root directory directly to the tree
         for filename in sorted(root_info["files"]):
             tree.add(f"[green]{filename}[/green]")
+        
+        # Add root to queue
+        queue.append((tree, root_path))
+        processed.add(root_path)
     else:
         # If multiple root directories, create a common root
-        common_root = os.path.commonprefix(root_dirs)
         tree = Tree(f"[cyan]/[/cyan]")
+        
+        # If there are files directly in the root with no directory
+        if "" in directories and directories[""]["files"]:
+            for filename in sorted(directories[""]["files"]):
+                tree.add(f"[green]{filename}[/green]")
+            processed.add("")
             
         # Process each root directory as a branch
         for root_path in root_dirs:
@@ -81,14 +90,9 @@ def visualize_structure(file_paths, console=None):
             for filename in sorted(root_info["files"]):
                 branch.add(f"[green]{filename}[/green]")
             
-            # Start queue with this branch
-            queue = deque([(branch, root_path)])
-            processed = set([root_path])
-    
-        # If there are files directly in the root with no directory
-        if "" in directories and directories[""]["files"]:
-            for filename in sorted(directories[""]["files"]):
-                tree.add(f"[green]{filename}[/green]")
+            # Add this branch to the queue
+            queue.append((branch, root_path))
+            processed.add(root_path)
     
     # Process remaining directories using BFS
     while queue:
