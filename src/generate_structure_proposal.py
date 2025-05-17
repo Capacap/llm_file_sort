@@ -34,7 +34,7 @@ def format_files_for_ai(files: List[Dict[str, Any]]) -> str:
     
     return json.dumps(result, indent=2)
 
-def analyze_files_structure(api_key: str, model: str, formatted_files: str) -> str:
+def analyze_files_structure(api_key: str, model: str, formatted_files: str, port: int = 11434) -> str:
     """Get AI analysis of the file structure.
     
     Args:
@@ -86,16 +86,22 @@ def analyze_files_structure(api_key: str, model: str, formatted_files: str) -> s
     }
 
     # Get analysis from AI
-    response = completion(
-      model=model,
-      api_key=api_key,
-      messages=[user_message],
-      temperature=0.2,
-    )
+    completion_args = {
+      "model": model,
+      "api_key": api_key,
+      "messages": [user_message],
+      "temperature": 0.2
+    }
+    
+    # Only use api_base for Ollama if port is specified
+    if port is not None:
+      completion_args["api_base"] = f"http://localhost:{port}/v1"  # Ollama API endpoint
+      
+    response = completion(**completion_args)
     
     return response.choices[0].message.content
 
-def create_file_mapping(api_key: str, model: str, formatted_files: str, analysis: str) -> Dict[str, str]:
+def create_file_mapping(api_key: str, model: str, formatted_files: str, analysis: str, port: int = 11434) -> Dict[str, str]:
     """Create a mapping of original file paths to new paths based on analysis.
     
     Args:
@@ -149,25 +155,32 @@ def create_file_mapping(api_key: str, model: str, formatted_files: str, analysis
     }
 
     # Get mapping from AI
-    response = completion(
-      model=model,
-      api_key=api_key,
-      messages=[user_message],
-      temperature=0.1,
-      response_format={"type": "json_object"},
-    )
+    completion_args = {
+      "model": model,
+      "api_key": api_key,
+      "messages": [user_message],
+      "temperature": 0.1,
+      "response_format": {"type": "json_object"}
+    }
+    
+    # Only use api_base for Ollama if port is specified
+    if port is not None:
+      completion_args["api_base"] = f"http://localhost:{port}/v1"  # Ollama API endpoint
+      
+    response = completion(**completion_args)
     
     return json.loads(response.choices[0].message.content)
 
-def generate_structure_proposal(files: List[Dict[str, Any]], api_key: str, model: str, verbose: bool = False, console=None) -> Optional[Dict[str, str]]:
+def generate_structure_proposal(files: List[Dict[str, Any]], api_key: str, model: str, debug: bool = False, console=None, port: int = 11434) -> Optional[Dict[str, str]]:
     """Generate a proposal for reorganizing file structure.
     
     Args:
         files: List of file dictionaries containing path, size, extension, and last_modified
         api_key: API key for the LLM service
         model: LLM model identifier
-        verbose: If True, print AI responses to stdout
+        debug: If True, print AI responses to stdout
         console: Optional rich console for output. If None, a new console will be created.
+        port: Port number for Ollama local inference
         
     Returns:
         Dictionary mapping original file paths to proposed new paths, or None if validation fails
@@ -182,14 +195,14 @@ def generate_structure_proposal(files: List[Dict[str, Any]], api_key: str, model
     formatted_files_listing = format_files_for_ai(files)
 
     # Step 1: Analyze file structure
-    analysis = analyze_files_structure(api_key, model, formatted_files_listing)
-    if verbose:
+    analysis = analyze_files_structure(api_key, model, formatted_files_listing, port=port)
+    if debug:
         console.print("\n=== [bold blue]AI Structure Analysis[/bold blue] ===")
         console.print(analysis)
     
     # Step 2: Create file mapping based on analysis
-    file_mapping = create_file_mapping(api_key, model, formatted_files_listing, analysis)
-    if verbose:
+    file_mapping = create_file_mapping(api_key, model, formatted_files_listing, analysis, port=port)
+    if debug:
         console.print("\n=== [bold blue]AI Proposed File Mapping[/bold blue] ===")
         console.print_json(json.dumps(file_mapping, indent=2))
     
