@@ -53,8 +53,8 @@ if __name__ == "__main__":
         "directory": "data/testing",
         "debug": True,
         "model": "gpt-4.1-nano",
-        "api_key": None,  # Will use environment variable
-        "port": None # Default Ollama port
+        "api_key": None,
+        "port": None
     }
 
     main(

@@ -34,16 +34,17 @@ def format_files_for_ai(files: List[Dict[str, Any]]) -> str:
     
     return json.dumps(result, indent=2)
 
-def analyze_files_structure(api_key: str, model: str, formatted_files: str, port: int = 11434) -> str:
+def analyze_files_structure(api_key: str, model: str, formatted_files: str, port: int = 11434) -> tuple:
     """Get AI analysis of the file structure.
     
     Args:
         api_key: API key for the LLM service
         model: LLM model identifier
         formatted_files: JSON string containing file metadata
+        port: Port number for Ollama API
         
     Returns:
-        Analysis text from the LLM containing structure recommendations
+        Tuple containing (analysis_text, user_message)
     """
     
     # Define the instructions for the AI analysis phase
@@ -99,9 +100,9 @@ def analyze_files_structure(api_key: str, model: str, formatted_files: str, port
       
     response = completion(**completion_args)
     
-    return response.choices[0].message.content
+    return response.choices[0].message.content, user_message
 
-def create_file_mapping(api_key: str, model: str, formatted_files: str, analysis: str, port: int = 11434) -> Dict[str, str]:
+def create_file_mapping(api_key: str, model: str, formatted_files: str, analysis: str, port: int = 11434) -> tuple:
     """Create a mapping of original file paths to new paths based on analysis.
     
     Args:
@@ -109,9 +110,10 @@ def create_file_mapping(api_key: str, model: str, formatted_files: str, analysis
         model: LLM model identifier
         formatted_files: JSON string containing file metadata
         analysis: Previous analysis text from the LLM
+        port: Port number for Ollama API
         
     Returns:
-        Dictionary mapping original file paths to proposed new paths
+        Tuple containing (file_mapping_dict, user_message)
     """
     
     mapping_instructions = dedent(f"""
@@ -169,7 +171,7 @@ def create_file_mapping(api_key: str, model: str, formatted_files: str, analysis
       
     response = completion(**completion_args)
     
-    return json.loads(response.choices[0].message.content)
+    return json.loads(response.choices[0].message.content), user_message
 
 def generate_structure_proposal(files: List[Dict[str, Any]], api_key: str, model: str, debug: bool = False, console=None, port: int = 11434) -> Optional[Dict[str, str]]:
     """Generate a proposal for reorganizing file structure.
@@ -195,15 +197,19 @@ def generate_structure_proposal(files: List[Dict[str, Any]], api_key: str, model
     formatted_files_listing = format_files_for_ai(files)
 
     # Step 1: Analyze file structure
-    analysis = analyze_files_structure(api_key, model, formatted_files_listing, port=port)
+    analysis, analysis_user_message = analyze_files_structure(api_key, model, formatted_files_listing, port=port)
     if debug:
-        console.print("\n=== [bold blue]AI Structure Analysis[/bold blue] ===")
+        console.print("\n=== [bold blue]AI Structure Analysis - User Message[/bold blue] ===")
+        console.print(analysis_user_message["content"])
+        console.print("\n=== [bold blue]AI Structure Analysis - Response[/bold blue] ===")
         console.print(analysis)
     
     # Step 2: Create file mapping based on analysis
-    file_mapping = create_file_mapping(api_key, model, formatted_files_listing, analysis, port=port)
+    file_mapping, mapping_user_message = create_file_mapping(api_key, model, formatted_files_listing, analysis, port=port)
     if debug:
-        console.print("\n=== [bold blue]AI Proposed File Mapping[/bold blue] ===")
+        console.print("\n=== [bold blue]AI File Mapping - User Message[/bold blue] ===")
+        console.print(mapping_user_message["content"])
+        console.print("\n=== [bold blue]AI Proposed File Mapping - Response[/bold blue] ===")
         console.print_json(json.dumps(file_mapping, indent=2))
     
     try:
