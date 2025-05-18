@@ -173,7 +173,34 @@ def create_file_mapping(api_key: str, model: str, formatted_files: str, analysis
     
     return json.loads(response.choices[0].message.content), user_message
 
-def generate_structure_proposal(files: List[Dict[str, Any]], api_key: str, model: str, debug: bool = False, console=None, port: int = 11434) -> Optional[Dict[str, str]]:
+def validate_file_mapping(files: List[Dict[str, Any]], file_mapping: Dict[str, str], console=None) -> Dict[str, str]:
+    """Validates that the proposed file mapping includes all original files.
+    
+    Args:
+        files: List of file dictionaries containing path and other metadata
+        file_mapping: Dictionary mapping original file paths to proposed new paths
+        console: Optional rich console for output
+        
+    Returns:
+        The validated file mapping
+        
+    Raises:
+        MissingFilesError: If any files are missing from the proposed structure
+    """
+    if console is None:
+        console = Console()
+        
+    # Check for missing files
+    original_files = [file["path"] for file in files]
+    proposed_files = file_mapping.keys()
+    missing_files = set(original_files) - set(proposed_files)
+    
+    if missing_files:
+        raise MissingFilesError(missing_files)
+    
+    return file_mapping
+
+def generate_structure_proposal(files: List[Dict[str, Any]], api_key: str, model: str, debug: bool = False, console=None, port: int = 11434) -> Dict[str, str]:
     """Generate a proposal for reorganizing file structure.
     
     Args:
@@ -185,10 +212,7 @@ def generate_structure_proposal(files: List[Dict[str, Any]], api_key: str, model
         port: Port number for Ollama local inference
         
     Returns:
-        Dictionary mapping original file paths to proposed new paths, or None if validation fails
-        
-    Raises:
-        MissingFilesError: If any files are missing from the proposed structure
+        Dictionary mapping original file paths to proposed new paths
     """
     if console is None:
         console = Console()
@@ -212,20 +236,4 @@ def generate_structure_proposal(files: List[Dict[str, Any]], api_key: str, model
         console.print("\n=== [bold blue]AI Proposed File Mapping - Response[/bold blue] ===")
         console.print_json(json.dumps(file_mapping, indent=2))
     
-    try:
-        # Check for missing files
-        original_files = [file["path"] for file in files]
-        proposed_files = file_mapping.keys()
-        missing_files = set(original_files) - set(proposed_files)
-        if missing_files:
-            raise MissingFilesError(missing_files)
-        
-        # Save the validated JSON response to a file
-        output_file = f"data/proposed_file_structure.json"
-        with open(output_file, "w") as f:
-            json.dump(file_mapping, f, indent=2)
-
-        return file_mapping
-        
-    except MissingFilesError as e:
-        sys.exit(2)  # Different error code for missing files
+    return file_mapping
