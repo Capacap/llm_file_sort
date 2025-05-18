@@ -82,10 +82,6 @@ def main(directory_path: str, model: str, debug: bool = False, api_key: str = No
     # If direct API key not provided, try environment variable specified by api_key_env
     if effective_api_key is None and api_key_env:
         effective_api_key = os.getenv(api_key_env)
-    
-    # If still no key, try default OPENAI_API_KEY as fallback
-    if effective_api_key is None:
-        effective_api_key = os.getenv("OPENAI_API_KEY")
         
     # Final check for OpenAI models needing an API key
     if effective_api_key is None and "gpt" in model.lower():
