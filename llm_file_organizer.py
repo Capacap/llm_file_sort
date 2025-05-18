@@ -1,8 +1,7 @@
 import os
 import sys
-from src.file_utils import get_files, move_files
+from src.file_utils import get_files, move_files, visualize_file_tree
 from src.generate_structure_proposal import generate_structure_proposal
-from src.visualize_structure import visualize_structure
 from rich.console import Console
 
 def validate_args(directory_path: str, debug: bool, model: str, api_key: str, api_key_env: str, port: int, console: Console) -> bool:
@@ -101,11 +100,11 @@ def main(directory_path: str, model: str, debug: bool = False, api_key: str = No
 
     # Visualize original file structure
     console.print("\n=== [bold blue]Original file structure[/bold blue] ===")
-    visualize_structure(list(file_mapping.keys()), console=console)
+    visualize_file_tree(list(file_mapping.keys()), console=console)
 
     # Visualize proposed file structure
     console.print("\n=== [bold blue]Proposed file structure[/bold blue] ===")
-    visualize_structure(list(file_mapping.values()), console=console)
+    visualize_file_tree(list(file_mapping.values()), console=console)
 
     # Ask user for confirmation
     user_confirmation = input("\nProceed? (y/n): ")
