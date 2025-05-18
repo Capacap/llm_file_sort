@@ -11,7 +11,7 @@ class MissingFilesError(Exception):
         message = f"{len(missing_files)} files missing from proposed structure"
         super().__init__(message)
 
-def format_files_for_ai(files: List[Dict[str, Any]]) -> str:
+def _format_files_for_ai_context(files: List[Dict[str, Any]]) -> str:
     """Format file metadata to a JSON string for AI processing.
     
     Args:
@@ -34,7 +34,7 @@ def format_files_for_ai(files: List[Dict[str, Any]]) -> str:
     
     return json.dumps(result, indent=2)
 
-def analyze_files_structure(api_key: str, model: str, formatted_files: str, port: int = 11434) -> tuple:
+def _ai_analyze_file_tree(api_key: str, model: str, formatted_files: str, port: int) -> tuple:
     """Get AI analysis of the file structure.
     
     Args:
@@ -102,7 +102,7 @@ def analyze_files_structure(api_key: str, model: str, formatted_files: str, port
     
     return response.choices[0].message.content, user_message
 
-def create_file_mapping(api_key: str, model: str, formatted_files: str, analysis: str, port: int = 11434) -> tuple:
+def _ai_generate_file_mapping(api_key: str, model: str, formatted_files: str, analysis: str, port: int) -> tuple:
     """Create a mapping of original file paths to new paths based on analysis.
     
     Args:
@@ -200,15 +200,15 @@ def validate_file_mapping(files: List[Dict[str, Any]], file_mapping: Dict[str, s
     
     return file_mapping
 
-def generate_structure_proposal(files: List[Dict[str, Any]], api_key: str, model: str, debug: bool = False, console=None, port: int = 11434) -> Dict[str, str]:
+def build_file_mapping(files: List[Dict[str, Any]], api_key: str, model: str, debug: bool, console, port: int) -> Dict[str, str]:
     """Generate a proposal for reorganizing file structure.
     
     Args:
         files: List of file dictionaries containing path, size, extension, and last_modified
         api_key: API key for the LLM service
         model: LLM model identifier
-        debug: If True, print AI responses to stdout
-        console: Optional rich console for output. If None, a new console will be created.
+        debug: Whether to print AI responses to stdout
+        console: Rich console for output
         port: Port number for Ollama local inference
         
     Returns:
@@ -218,10 +218,10 @@ def generate_structure_proposal(files: List[Dict[str, Any]], api_key: str, model
         console = Console()
         
     # Format the files for AI processing
-    formatted_files_listing = format_files_for_ai(files)
+    formatted_files_listing = _format_files_for_ai_context(files)
 
     # Step 1: Analyze file structure
-    analysis, analysis_user_message = analyze_files_structure(api_key, model, formatted_files_listing, port=port)
+    analysis, analysis_user_message = _ai_analyze_file_tree(api_key, model, formatted_files_listing, port)
     if debug:
         console.print("\n=== [bold blue]AI Structure Analysis - User Message[/bold blue] ===")
         console.print(analysis_user_message["content"])
@@ -229,7 +229,7 @@ def generate_structure_proposal(files: List[Dict[str, Any]], api_key: str, model
         console.print(analysis)
     
     # Step 2: Create file mapping based on analysis
-    file_mapping, mapping_user_message = create_file_mapping(api_key, model, formatted_files_listing, analysis, port=port)
+    file_mapping, mapping_user_message = _ai_generate_file_mapping(api_key, model, formatted_files_listing, analysis, port)
     if debug:
         console.print("\n=== [bold blue]AI File Mapping - User Message[/bold blue] ===")
         console.print(mapping_user_message["content"])

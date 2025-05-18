@@ -1,7 +1,7 @@
 import os
 import sys
 from src.file_utils import get_files, move_files, visualize_file_tree
-from src.generate_structure_proposal import generate_structure_proposal, validate_file_mapping, MissingFilesError
+from src.ai_utils import build_file_mapping, validate_file_mapping, MissingFilesError
 from rich.console import Console
 
 def validate_args(directory_path: str, debug: bool, model: str, api_key: str, api_key_env: str, port: int, console: Console) -> bool:
@@ -97,11 +97,11 @@ def main(directory_path: str, model: str, debug: bool = False, api_key: str = No
         sys.exit(0)
         
     # Generate the structure proposal
-    file_mapping = generate_structure_proposal(files, effective_api_key, model, debug=debug, console=console, port=port)
+    file_mapping = build_file_mapping(files, effective_api_key, model, debug, console, port)
     
     # Validate the file mapping
     try:
-        file_mapping = validate_file_mapping(files, file_mapping, console=console)
+        file_mapping = validate_file_mapping(files, file_mapping, console)
     except MissingFilesError as e:
         console.print(f"[bold red]Error:[/bold red] {str(e)}")
         console.print("The AI-generated file mapping is missing some files. Please try again.")
