@@ -18,6 +18,35 @@ def get_file_info(file_path: str) -> Dict[str, Any]:
         "last_modified": datetime.datetime.fromtimestamp(file_stat.st_mtime).isoformat(),
     }
     
+    # Text file extensions to check beyond what mimetypes detects
+    text_extensions = {
+        '.txt', '.py', '.js', '.html', '.css', '.json', '.xml', '.md', '.csv',
+        '.ini', '.cfg', '.conf', '.yaml', '.yml', '.toml', '.sh', '.bat', '.ps1',
+        '.java', '.c', '.cpp', '.h', '.hpp', '.cs', '.php', '.rb', '.pl', '.sql',
+        '.go', '.rs', '.ts', '.jsx', '.tsx'
+    }
+    
+    # Check if file is likely to be a text file
+    is_text = False
+    mime_type, _ = mimetypes.guess_type(file_path)
+    
+    # Check MIME type first
+    if mime_type and ('text/' in mime_type or mime_type in ['application/json', 'application/xml', 'application/javascript']):
+        is_text = True
+    # Then check extension
+    elif Path(file_path).suffix.lower() in text_extensions:
+        is_text = True
+        
+    if is_text:
+        try:
+            with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+                # Read first 200 characters as a sample
+                content_sample = f.read(200)
+                file_info["content_sample"] = content_sample
+        except Exception:
+            # Keep default "Not available" if file can't be read
+            pass
+    
     return file_info
 
 def get_file_info_list(root_dir: str, max_depth: Optional[int] = None) -> List[Dict[str, Any]]:

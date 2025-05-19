@@ -160,7 +160,7 @@ if __name__ == "__main__":
         "api_key": None,
         "api_key_env": "OPENAI_API_KEY",
         "port": None,
-        "prompt": "Sort all text files into a text directory and all other files into a misc directory",
+        "prompt": "Sort all files with text content into a text directory and all other files into a misc directory",
     }
 
     main_two_step(args)

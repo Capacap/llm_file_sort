@@ -12,40 +12,40 @@ class MissingFilesError(Exception):
         super().__init__(message)
 
 def format_files_for_ai_context(file_info_list: List[Dict[str, Any]]) -> str:
-    """Convert a list of file information dictionaries to a token-efficient string.
+    """Convert a list of file information dictionaries to a JSON string.
     
     Args:
         file_info_list: List of dictionaries containing file metadata
         
     Returns:
-        A compact string representation of the files
+        A JSON string representation of the files
     """
     formatted_files = []
     
     for file_info in file_info_list:
         # Extract key details, handling optional fields
-        path = file_info.get("path", "")
-        modified = file_info.get("last_modified", "")
-        content = file_info.get("content_sample", "")
-        # Create a compact representation of each file
-        file_str = f"path: {path}\nlast modified: {modified}\ncontent: {content}"
-        formatted_files.append(file_str)
+        formatted_file = {
+            "path": file_info.get("path", ""),
+            "last_modified": file_info.get("last_modified", ""),
+            "content_sample": file_info.get("content_sample", "")
+        }
+        formatted_files.append(formatted_file)
     
-    return "\n\n".join(formatted_files)
+    return json.dumps(formatted_files, indent=2)
 
 def format_directories_for_ai_context(directories: List[str]) -> str:
-    """Convert a list of directory paths to a token-efficient string.
+    """Convert a list of directory paths to a JSON string.
     
     Args:
         directories: List of directory paths
         
     Returns:
-        A compact string representation of the directories
+        A JSON string representation of the directories
     """
     # Sort directories to group related paths
     sorted_dirs = sorted(directories)
     
-    return "\n".join(sorted_dirs)
+    return json.dumps(sorted_dirs, indent=2)
 
 def ai_generate_directory_structure(api_key: str, model: str, formatted_files: str, port: int, prompt: str = None) -> tuple:
     """Generate a directory structure for organizing files.
@@ -53,7 +53,7 @@ def ai_generate_directory_structure(api_key: str, model: str, formatted_files: s
     Args:
         api_key: API key for the LLM service
         model: LLM model identifier
-        formatted_files: Minimalistic text string containing file metadata
+        formatted_files: JSON string containing file metadata
         port: Port number for Ollama API
         prompt: Optional additional instructions for the AI
         
@@ -132,8 +132,8 @@ def ai_map_files_to_directories(api_key: str, model: str, formatted_files: str, 
     Args:
         api_key: API key for the LLM service
         model: LLM model identifier
-        formatted_files: Minimalistic text string containing file metadata
-        formatted_directories: Minimalistic text string containing directory structure
+        formatted_files: JSON string containing file metadata
+        formatted_directories: JSON string containing directory structure
         port: Port number for Ollama API
         prompt: Optional additional instructions for the AI
         
@@ -212,8 +212,8 @@ def ai_fix_missing_files(api_key: str, model: str, formatted_files: str,
     Args:
         api_key: API key for the LLM service
         model: LLM model identifier
-        formatted_files: Minimalistic text string containing file metadata
-        formatted_directories: Minimalistic text string containing directory structure
+        formatted_files: JSON string containing file metadata
+        formatted_directories: JSON string containing directory structure
         file_mapping: The incomplete file mapping dictionary
         missing_files: Set of file paths missing from the mapping
         port: Port number for Ollama API
