@@ -42,13 +42,14 @@ def get_file_info_list(root_dir: str, max_depth: Optional[int] = None) -> List[D
     
     return file_info_list
 
-def move_files(file_mapping, console=None):
+def move_files(file_mapping, console=None, debug=False):
     """
     Move files according to the provided mapping dictionary.
     
     Args:
         file_mapping: Dictionary mapping source paths to destination paths
         console: Optional rich console for output. If None, a new console will be created.
+        debug: Whether to show detailed debug information
     """
     if console is None:
         console = Console()
@@ -66,17 +67,21 @@ def move_files(file_mapping, console=None):
             # Move the file
             shutil.move(source_path, dest_path)
             
-            console.print(f"[green]Moved:[/green] {source_path} → {dest_path}")
+            if debug:
+                console.print(f"[green]Moved:[/green] {source_path} → {dest_path}")
             successful_moves += 1
             
         except FileNotFoundError:
-            console.print(f"[red]Error:[/red] Source file not found: {source_path}")
+            if debug:
+                console.print(f"[red]Error:[/red] Source file not found: {source_path}")
             failed_moves += 1
         except PermissionError:
-            console.print(f"[red]Error:[/red] Permission denied for: {source_path}")
+            if debug:
+                console.print(f"[red]Error:[/red] Permission denied for: {source_path}")
             failed_moves += 1
         except Exception as e:
-            console.print(f"[red]Error:[/red] Failed to move {source_path}: {str(e)}")
+            if debug:
+                console.print(f"[red]Error:[/red] Failed to move {source_path}: {str(e)}")
             failed_moves += 1
     
     # Print summary
@@ -84,13 +89,14 @@ def move_files(file_mapping, console=None):
     
     return successful_moves, failed_moves
 
-def clean_empty_directories(file_mapping: Dict[str, str], console=None):
+def clean_empty_directories(file_mapping: Dict[str, str], console=None, debug=False):
     """
     Check source file paths and remove any directories that are now empty after file movement.
     
     Args:
         file_mapping: Dictionary mapping source paths to destination paths
         console: Optional rich console for output. If None, a new console will be created.
+        debug: Whether to show detailed debug information
     
     Returns:
         int: Number of directories removed
@@ -116,7 +122,8 @@ def clean_empty_directories(file_mapping: Dict[str, str], console=None):
             # Check if directory exists and is empty
             if os.path.exists(directory) and not os.listdir(directory):
                 os.rmdir(directory)
-                console.print(f"[yellow]Removed empty directory:[/yellow] {directory}")
+                if debug:
+                    console.print(f"[yellow]Removed empty directory:[/yellow] {directory}")
                 removed_count += 1
                 
                 # Check parent directories recursively
@@ -124,15 +131,18 @@ def clean_empty_directories(file_mapping: Dict[str, str], console=None):
                 while parent and os.path.exists(parent):
                     if not os.listdir(parent):
                         os.rmdir(parent)
-                        console.print(f"[yellow]Removed empty parent directory:[/yellow] {parent}")
+                        if debug:
+                            console.print(f"[yellow]Removed empty parent directory:[/yellow] {parent}")
                         removed_count += 1
                         parent = os.path.dirname(parent)
                     else:
                         break
         except PermissionError:
-            console.print(f"[red]Error:[/red] Permission denied when trying to remove directory: {directory}")
+            if debug:
+                console.print(f"[red]Error:[/red] Permission denied when trying to remove directory: {directory}")
         except Exception as e:
-            console.print(f"[red]Error:[/red] Failed to remove directory {directory}: {str(e)}")
+            if debug:
+                console.print(f"[red]Error:[/red] Failed to remove directory {directory}: {str(e)}")
     
     if removed_count > 0:
         console.print(f"\n[bold]Cleanup:[/bold] Removed {removed_count} empty directories")

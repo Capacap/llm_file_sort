@@ -81,12 +81,14 @@ def main_two_step(kw_args: dict):
         prompt=kw_args["prompt"]
     )
 
+    # Debug print user and assistant messages
     if kw_args["debug"]:
         console.print("=== [bold blue]User Message[/bold blue] ===")
         console.print(user_message["content"])
         console.print("=== [bold blue]Assistant Response[/bold blue] ===")
         console.print(assistant_response.choices[0].message.content)
 
+    # Parse assistant response
     try:
         dir_structure = json.loads(assistant_response.choices[0].message.content)
         directories = dir_structure.get("directories", [])
@@ -105,12 +107,14 @@ def main_two_step(kw_args: dict):
         prompt=kw_args["prompt"]
     )
 
+    # Debug print user and assistant messages
     if kw_args["debug"]:
         console.print("=== [bold blue]User Message[/bold blue] ===")
         console.print(user_message["content"])
         console.print("=== [bold blue]Assistant Response[/bold blue] ===")
         console.print(assistant_response.choices[0].message.content)
 
+    # Parse assistant response
     try:
         file_mapping = json.loads(assistant_response.choices[0].message.content)
     except json.JSONDecodeError:
@@ -138,10 +142,13 @@ def main_two_step(kw_args: dict):
         console.print("[bold yellow]Warning:[/bold yellow] Files not moved")
         return
     
+    # Move files
     root_dir = kw_args["directory"]
     absolute_mapping = {os.path.abspath(os.path.join(root_dir, old)): os.path.abspath(os.path.join(root_dir, new)) for old, new in file_mapping.items()}
-    move_files(absolute_mapping, console=console)
-    clean_empty_directories(absolute_mapping, console=console)
+    move_files(absolute_mapping, console=console, debug=kw_args["debug"])
+
+    # Clean empty directories
+    clean_empty_directories(absolute_mapping, console=console, debug=kw_args["debug"])
 
 if __name__ == "__main__":
     args = {
