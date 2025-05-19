@@ -8,8 +8,8 @@ from src.ai_utils import (
     format_directories_for_ai_context,
     ai_generate_directory_structure,
     ai_map_files_to_directories,
+    ai_fix_missing_files,
     validate_file_mapping, 
-    MissingFilesError,
 )
 
 def validate_args(directory_path: str, debug: bool, model: str, api_key: str, api_key_env: str, port: int, console: Console) -> bool:
@@ -120,13 +120,15 @@ def main_two_step(kw_args: dict):
     except json.JSONDecodeError:
         console.print("[bold red]Error:[/bold red] Failed to parse assistant response as JSON")
         return
-
-    # Validate the file mapping
-    try:
-        validate_file_mapping(file_info_list, file_mapping, console)
-    except MissingFilesError as e:
-        console.print(f"[bold yellow]Warning:[/bold yellow] {len(e.missing_files)} files missing from proposed structure. Asking AI to fix...")
-        # TODO: Implement fix for missing files in the two-step approach
+    
+    # Check for missing files
+    included_files, missing_files = validate_file_mapping(file_info_list, file_mapping, console)
+    if missing_files:
+        file_mapping = ai_fix_missing_files(api_key=kw_args["api_key"], model=kw_args["model"], formatted_files=formatted_files, formatted_directories=formatted_dirs, file_mapping=file_mapping, missing_files=missing_files, port=kw_args["port"], prompt=kw_args["prompt"])
+        included_files, missing_files = validate_file_mapping(file_info_list, file_mapping, console)
+        if missing_files:
+            console.print("[bold red]Error:[/bold red] Failed to fix missing files")
+            return
 
     # Visualize original file structure
     console.print("\n=== [bold blue]Original file structure[/bold blue] ===")
@@ -158,7 +160,7 @@ if __name__ == "__main__":
         "api_key": None,
         "api_key_env": "OPENAI_API_KEY",
         "port": None,
-        "prompt": None,
+        "prompt": "Sort all text files into a text directory and all other files into a misc directory",
     }
 
     main_two_step(args)

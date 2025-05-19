@@ -204,7 +204,105 @@ Example:
     
     return response, user_message
 
+def ai_fix_missing_files(api_key: str, model: str, formatted_files: str, 
+                        formatted_directories: str, file_mapping: Dict[str, str], 
+                        missing_files: set, port: int, prompt: str = None) -> Dict[str, str]:
+    """Ask the AI to include missing files in an incomplete file mapping.
+    
+    Args:
+        api_key: API key for the LLM service
+        model: LLM model identifier
+        formatted_files: Minimalistic text string containing file metadata
+        formatted_directories: Minimalistic text string containing directory structure
+        file_mapping: The incomplete file mapping dictionary
+        missing_files: Set of file paths missing from the mapping
+        port: Port number for Ollama API
+        prompt: Optional additional instructions for the AI
+        
+    Returns:
+        Updated file mapping dictionary with missing files included
+    """
+    # Format the missing files as a string for the AI
+    missing_files_str = "\n".join(missing_files)
+    
+    # Define the instructions for fixing the missing files
+    fix_instructions = f"""
+<task>
+Add missing files to an incomplete file mapping.
+</task>
 
+<input_files>
+{formatted_files}
+</input_files>
+
+<available_directories>
+{formatted_directories}
+</available_directories>
+
+<current_mapping>
+{json.dumps(file_mapping, indent=2)}
+</current_mapping>
+
+<missing_files>
+{missing_files_str}
+</missing_files>
+
+<output_format>
+Return ONLY a valid JSON object with:
+- Keys: original file paths for ONLY the missing files
+- Values: new file paths that include an appropriate directory from the provided structure
+
+Example:
+{{
+    "missing_file1.txt": "docs/missing_file1.txt",
+    "missing_file2.py": "src/utils/missing_file2.py"
+}}
+</output_format>
+
+<constraints>
+- Map ONLY the missing files listed above
+- Use only the directories provided in the available_directories list
+- Maintain original filenames
+- Group similar files in the same directory as already mapped files
+- Consider file type, content, and purpose when deciding placement
+- Consider the patterns established in the current mapping
+</constraints>
+"""
+
+    # Add user's custom prompt if provided
+    if prompt:
+        fix_instructions += f"\n\n<additional_instructions>\n{prompt}\n</additional_instructions>"
+
+    # Define the user message
+    user_message = {
+      "role": "user",
+      "content": fix_instructions
+    }
+
+    # Get file mapping from AI
+    completion_args = {
+      "model": model,
+      "api_key": api_key,
+      "messages": [user_message],
+      "temperature": 0.1,
+      "response_format": {"type": "json_object"}
+    }
+    
+    # Only use api_base for Ollama if port is specified
+    if port is not None:
+      completion_args["api_base"] = f"http://localhost:{port}/v1"  # Ollama API endpoint
+      
+    response = completion(**completion_args)
+    
+    # Extract the fixed mapping from the response
+    fixed_mapping = json.loads(response.choices[0].message.content)
+    
+    # Update the original mapping with the fixed entries
+    updated_mapping = {**file_mapping, **fixed_mapping}
+    
+    return updated_mapping
+
+def ai_generate_file_mapping(files: List[Dict[str, Any]], api_key: str, model: str, port: int, prompt: str = None, debug: bool = False, console: Optional[Console] = None) -> Dict[str, str]:
     """Generate a file mapping using a two-step approach: first create directories, then map files.
     
     Args:
@@ -226,7 +324,10 @@ Example:
     formatted_files_listing = format_files_for_ai_context(files)
 
     # Step 1: Generate directory structure
-    directories, dir_user_message = ai_generate_directory_structure(api_key, model, formatted_files_listing, port, prompt)
+    directories_resp, dir_user_message = ai_generate_directory_structure(api_key, model, formatted_files_listing, port, prompt)
+    directories = json.loads(directories_resp.choices[0].message.content).get("directories", [])
+    formatted_directories = "\n".join(directories)
+    
     if debug:
         console.print("\n=== [bold blue]AI Directory Structure - User Message[/bold blue] ===")
         console.print(dir_user_message["content"])
@@ -234,7 +335,9 @@ Example:
         console.print_json(json.dumps(directories, indent=2))
     
     # Step 2: Map files to directories
-    file_mapping, mapping_user_message = ai_map_files_to_directories(api_key, model, formatted_files_listing, directories, port, prompt)
+    file_mapping_resp, mapping_user_message = ai_map_files_to_directories(api_key, model, formatted_files_listing, formatted_directories, port, prompt)
+    file_mapping = json.loads(file_mapping_resp.choices[0].message.content)
+    
     if debug:
         console.print("\n=== [bold blue]AI File Mapping - User Message[/bold blue] ===")
         console.print(mapping_user_message["content"])
@@ -243,5 +346,30 @@ Example:
     
     return file_mapping
 
-def validate_file_mapping(files: List[Dict[str, Any]], file_mapping: Dict[str, str], console: Console) -> None:
-    ...
+def validate_file_mapping(file_info_list: List[Dict[str, Any]], file_mapping: Dict[str, str], console: Console) -> None:
+    """Validate that all files in file_info_list are included in the file mapping.
+    
+    Args:
+        file_info_list: List of dictionaries containing file metadata
+        file_mapping: Dictionary mapping original file paths to new paths
+        console: Rich console for output
+        
+    Raises:
+        MissingFilesError: If any files are missing from the mapping
+        
+    Returns:
+        None
+    """
+    # Extract the original file paths from file_info_list
+    original_paths = {file_info.get("path") for file_info in file_info_list if file_info.get("path")}
+    
+    # Get the keys from the file_mapping (original paths)
+    mapped_paths = set(file_mapping.keys())
+    
+    # Find missing files (in original_paths but not in mapped_paths)
+    missing_files = original_paths - mapped_paths
+    
+    # Find included files (in both original_paths and mapped_paths)
+    included_files = original_paths.intersection(mapped_paths)
+
+    return included_files, missing_files
