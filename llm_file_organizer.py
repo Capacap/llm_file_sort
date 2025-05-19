@@ -1,8 +1,16 @@
 import os
 import sys
-from src.file_utils import get_files, move_files, visualize_file_tree
-from src.ai_utils import build_file_mapping, validate_file_mapping, MissingFilesError
+import json
 from rich.console import Console
+from src.file_utils import get_file_info_list, move_files, visualize_file_tree
+from src.ai_utils import (
+    format_files_for_ai_context, 
+    format_directories_for_ai_context,
+    ai_generate_directory_structure,
+    ai_map_files_to_directories,
+    validate_file_mapping, 
+    MissingFilesError,
+)
 
 def validate_args(directory_path: str, debug: bool, model: str, api_key: str, api_key_env: str, port: int, console: Console) -> bool:
     """Validate command line arguments and parameters.
@@ -57,56 +65,64 @@ def validate_args(directory_path: str, debug: bool, model: str, api_key: str, ap
     
     return True
 
-def main(directory_path: str, model: str, debug: bool = False, api_key: str = None, api_key_env: str = None, port: int = None, prompt: str = None):
-    """Main function for organizing files.
-    
-    Args:
-        directory_path: Path to the directory to organize
-        model: LLM model to use
-        debug: Whether to show debug information
-        api_key: Direct API key for LLM service
-        api_key_env: Name of environment variable containing API key
-        port: Port for Ollama local inference
-        prompt: Optional additional instructions for the AI
-    """
-    # Create a shared console instance
+def main_two_step(kw_args: dict):
     console = Console()
 
-    # Validate arguments
-    if not validate_args(directory_path, debug, model, api_key, api_key_env, port, console):
-        sys.exit(1)
-    
-    # Get API key - prioritize direct key over environment variable
-    effective_api_key = api_key
-    
-    # If direct API key not provided, try environment variable specified by api_key_env
-    if effective_api_key is None and api_key_env:
-        effective_api_key = os.getenv(api_key_env)
-        
-    # Final check for OpenAI models needing an API key
-    if effective_api_key is None and "gpt" in model.lower():
-        console.print("[bold red]Error:[/bold red] No API key available from any source")
-        sys.exit(1)
+    # Get files and format them for AI processing
+    file_info_list = get_file_info_list(kw_args["directory"])
+    formatted_files = format_files_for_ai_context(file_info_list)
 
-    console.print("\n=== [bold blue]Starting file organization[/bold blue] ===")
+    # Generate directory structure
+    assistant_response, user_message = ai_generate_directory_structure(
+        api_key=kw_args["api_key"],
+        model=kw_args["model"],
+        formatted_files=formatted_files,
+        port=kw_args["port"],
+        prompt=kw_args["prompt"]
+    )
 
-    # Get files
-    files = get_files(directory_path)
-    
-    if not files:
-        console.print(f"[bold yellow]Warning:[/bold yellow] No files found in '{directory_path}'")
-        sys.exit(0)
-        
-    # Generate the structure proposal
-    file_mapping = build_file_mapping(files, effective_api_key, model, debug, console, port, prompt)
-    
+    if kw_args["debug"]:
+        console.print("=== [bold blue]User Message[/bold blue] ===")
+        console.print(user_message["content"])
+        console.print("=== [bold blue]Assistant Response[/bold blue] ===")
+        console.print(assistant_response.choices[0].message.content)
+
+    try:
+        dir_structure = json.loads(assistant_response.choices[0].message.content)
+        directories = dir_structure.get("directories", [])
+        formatted_dirs = format_directories_for_ai_context(directories)
+    except json.JSONDecodeError:
+        console.print("[bold red]Error:[/bold red] Failed to parse assistant response as JSON")
+        return
+
+    # Map files to directories
+    assistant_response, user_message = ai_map_files_to_directories(
+        api_key=kw_args["api_key"],
+        model=kw_args["model"],
+        formatted_files=formatted_files,
+        formatted_directories=formatted_dirs,
+        port=kw_args["port"],
+        prompt=kw_args["prompt"]
+    )
+
+    if kw_args["debug"]:
+        console.print("=== [bold blue]User Message[/bold blue] ===")
+        console.print(user_message["content"])
+        console.print("=== [bold blue]Assistant Response[/bold blue] ===")
+        console.print(assistant_response.choices[0].message.content)
+
+    try:
+        file_mapping = json.loads(assistant_response.choices[0].message.content)
+    except json.JSONDecodeError:
+        console.print("[bold red]Error:[/bold red] Failed to parse assistant response as JSON")
+        return
+
     # Validate the file mapping
     try:
-        file_mapping = validate_file_mapping(files, file_mapping, console)
+        validate_file_mapping(file_info_list, file_mapping, console)
     except MissingFilesError as e:
-        console.print(f"[bold red]Error:[/bold red] {str(e)}")
-        console.print("The AI-generated file mapping is missing some files. Please try again.")
-        sys.exit(2)
+        console.print(f"[bold yellow]Warning:[/bold yellow] {len(e.missing_files)} files missing from proposed structure. Asking AI to fix...")
+        # TODO: Implement fix for missing files in the two-step approach
 
     # Visualize original file structure
     console.print("\n=== [bold blue]Original file structure[/bold blue] ===")
@@ -116,31 +132,17 @@ def main(directory_path: str, model: str, debug: bool = False, api_key: str = No
     console.print("\n=== [bold blue]Proposed file structure[/bold blue] ===")
     visualize_file_tree(list(file_mapping.values()), console=console)
 
-    # Ask user for confirmation
-    user_confirmation = input("\nProceed? (y/n): ")
-    if user_confirmation.lower() == "y":
-        # Move files
-        console.print("\n=== [bold green]Moving files[/bold green] ===")
-        absolute_file_mapping = {os.path.join(directory_path, k): os.path.join(directory_path, v) for k, v in file_mapping.items()}
-        move_files(absolute_file_mapping, console=console)
-    else:
-        console.print("Operation cancelled.")
-
+    # Get user confirmation
+    user_confirmation = input("Are you sure you want to move the files? (y/n): ")
+    if user_confirmation.lower() != "y":
+        console.print("[bold yellow]Warning:[/bold yellow] Files not moved")
+        return
+    
+    root_dir = kw_args["directory"]
+    absolute_mapping = {os.path.abspath(os.path.join(root_dir, old)): os.path.abspath(os.path.join(root_dir, new)) for old, new in file_mapping.items()}
+    move_files(absolute_mapping, console=console)
 
 if __name__ == "__main__":
-    # Uncomment to use command-line arguments
-    # import argparse
-    # parser = argparse.ArgumentParser(description="File organization tool")
-    # parser.add_argument("directory", type=str, help="Directory to organize")
-    # parser.add_argument("--model", type=str, required=True, help="LLM model to use")
-    # parser.add_argument("--debug", action="store_true", help="Show debug information")
-    # parser.add_argument("--api-key", type=str, help="API key for LLM service")
-    # parser.add_argument("--api-key-env", type=str, help="Name of environment variable containing API key")
-    # parser.add_argument("--port", type=int, help="Port for Ollama local inference")
-    # parser.add_argument("--prompt", type=str, help="Additional instructions for the AI")
-    # args = parser.parse_args()
-    # main(args.directory, args.model, args.debug, args.api_key, args.api_key_env, args.port, args.prompt)
-
     args = {
         "directory": "data/testing",
         "model": "gpt-4.1-nano",  
@@ -148,15 +150,7 @@ if __name__ == "__main__":
         "api_key": None,
         "api_key_env": "OPENAI_API_KEY",
         "port": None,
-        "prompt": "Organize the all text based files into a single folder called 'text_files' and the rest into a folder called 'other_files'"
+        "prompt": None,
     }
 
-    main(
-        args["directory"],
-        args["model"],
-        args["debug"],
-        args["api_key"],
-        args["api_key_env"],
-        args["port"],
-        args["prompt"]
-    )
+    main_two_step(args)

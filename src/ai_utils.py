@@ -11,92 +11,111 @@ class MissingFilesError(Exception):
         message = f"{len(missing_files)} files missing from proposed structure"
         super().__init__(message)
 
-def _format_files_for_ai_context(files: List[Dict[str, Any]]) -> str:
-    """Format file metadata to a JSON string for AI processing.
+def format_files_for_ai_context(file_info_list: List[Dict[str, Any]]) -> str:
+    """Convert a list of file information dictionaries to a token-efficient string.
     
     Args:
-        files: List of file dictionaries containing path, size, extension, and last_modified
+        file_info_list: List of dictionaries containing file metadata
         
     Returns:
-        JSON string with formatted file information
+        A compact string representation of the files
     """
-    result = []
+    formatted_files = []
     
-    for file in sorted(files, key=lambda x: x["path"]):
-        file_info = {
-            "path": file["path"],
-            "size": file["size"],
-            "type": file["extension"].lstrip("."),
-            "last_modified": file["last_modified"],
-            "content_sample": file["content_sample"]
-        }
-        result.append(file_info)
+    for file_info in file_info_list:
+        # Extract key details, handling optional fields
+        path = file_info.get("path", "")
+        modified = file_info.get("last_modified", "")
+        content = file_info.get("content_sample", "")
+        # Create a compact representation of each file
+        file_str = f"path: {path}\nlast modified: {modified}\ncontent: {content}"
+        formatted_files.append(file_str)
     
-    return json.dumps(result, indent=2)
+    return "\n\n".join(formatted_files)
 
-def _ai_analyze_file_tree(api_key: str, model: str, formatted_files: str, port: int, prompt: str = None) -> tuple:
-    """Get AI analysis of the file structure.
+def format_directories_for_ai_context(directories: List[str]) -> str:
+    """Convert a list of directory paths to a token-efficient string.
+    
+    Args:
+        directories: List of directory paths
+        
+    Returns:
+        A compact string representation of the directories
+    """
+    # Sort directories to group related paths
+    sorted_dirs = sorted(directories)
+    
+    return "\n".join(sorted_dirs)
+
+def ai_generate_directory_structure(api_key: str, model: str, formatted_files: str, port: int, prompt: str = None) -> tuple:
+    """Generate a directory structure for organizing files.
     
     Args:
         api_key: API key for the LLM service
         model: LLM model identifier
-        formatted_files: JSON string containing file metadata
+        formatted_files: Minimalistic text string containing file metadata
         port: Port number for Ollama API
         prompt: Optional additional instructions for the AI
         
     Returns:
-        Tuple containing (analysis_text, user_message)
+        Tuple containing (directory_structure_object, user_message)
     """
     
-    # Define the instructions for the AI analysis phase
-    analysis_instructions = dedent(f"""
-    <task>
-    Analyze the provided files and suggest a logical structure that would improve organization and maintainability.
-    </task>
+    # Define the instructions for the directory structure generation
+    directory_instructions = f"""
+<task>
+Based on the provided files, suggest a logical directory structure to improve organization.
+</task>
 
-    <requirements>
-    1. Analyze file types, sizes, timestamps, and naming patterns
-    2. Identify potential functional groups or domains
-    3. Consider organization strategies (domain/functionality, file purpose, file type)
-    4. Provide brief reasoning for your suggested structure
-    </requirements>
+<input_files>
+{formatted_files}
+</input_files>
 
-    <input_files>
-    {formatted_files}
-    </input_files>
+<output_format>
+Return ONLY a valid JSON object with a "directories" field containing an array of directory paths.
+Each directory should be represented as a string with a path relative to the root.
 
-    <output_format>
-    Provide a concise analysis with:
-    1. Short summary of file collection (key types and patterns)
-    2. Core identified groups or categories
-    3. Suggested directory structure with minimal justification
-    </output_format>
+Example:
+{{
+    "directories": [
+    "code_files",
+    "code_files/archives",
+    "code_files/downloads",
+    "text_files",
+    "text_files/reports",
+    "text_files/configs",
+    "other_files"
+    ]
+}}
+</output_format>
 
-    <constraints>
-    - Keep suggested structure practical (max 3-4 levels deep)
-    - Maintain original filenames
-    - Prioritize maintainability and ease of navigation
-    - Be concise and to the point - avoid unnecessary elaboration
-    - Focus on the most important observations and recommendations
-    </constraints>
-    """)
+<constraints>
+- Keep the directory structure practical (max 3-4 levels deep)
+- Focus on creating a logical organization based on file types and purposes
+- Consider common organizational patterns for the type of project detected
+- Directories should be logical groupings that make navigation intuitive
+- Don't create too many directories (aim for quality over quantity)
+- Return ONLY the JSON object as specified, nothing else
+</constraints>
+"""
 
     # Add user's custom prompt if provided
     if prompt:
-        analysis_instructions += f"\n\n<additional_instructions>\n{prompt}\n</additional_instructions>"
+        directory_instructions += f"\n\n<additional_instructions>\n{prompt}\n</additional_instructions>"
 
     # Define the user message
     user_message = {
       "role": "user",
-      "content": analysis_instructions
+      "content": directory_instructions
     }
 
-    # Get analysis from AI
+    # Get directory structure from AI
     completion_args = {
       "model": model,
       "api_key": api_key,
       "messages": [user_message],
-      "temperature": 0.2
+      "temperature": 0.2,
+      "response_format": {"type": "json_object"}
     }
     
     # Only use api_base for Ollama if port is specified
@@ -105,16 +124,16 @@ def _ai_analyze_file_tree(api_key: str, model: str, formatted_files: str, port: 
       
     response = completion(**completion_args)
     
-    return response.choices[0].message.content, user_message
+    return response, user_message
 
-def _ai_generate_file_mapping(api_key: str, model: str, formatted_files: str, analysis: str, port: int, prompt: str = None) -> tuple:
-    """Create a mapping of original file paths to new paths based on analysis.
+def ai_map_files_to_directories(api_key: str, model: str, formatted_files: str, formatted_directories: str, port: int, prompt: str = None) -> tuple:
+    """Map files to the provided directory structure.
     
     Args:
         api_key: API key for the LLM service
         model: LLM model identifier
-        formatted_files: JSON string containing file metadata
-        analysis: Previous analysis text from the LLM
+        formatted_files: Minimalistic text string containing file metadata
+        formatted_directories: Minimalistic text string containing directory structure
         port: Port number for Ollama API
         prompt: Optional additional instructions for the AI
         
@@ -122,39 +141,41 @@ def _ai_generate_file_mapping(api_key: str, model: str, formatted_files: str, an
         Tuple containing (file_mapping_dict, user_message)
     """
     
-    mapping_instructions = dedent(f"""
-    <task>
-    Based on your previous analysis, create a specific file mapping JSON that reorganizes the files.
-    </task>
+    # Define the instructions for the file mapping
+    mapping_instructions = f"""
+<task>
+Map each file to the most appropriate directory in the provided structure.
+</task>
 
-    <previous_analysis>
-    {analysis}
-    </previous_analysis>
+<input_files>
+{formatted_files}
+</input_files>
 
-    <input_files>
-    {formatted_files}
-    </input_files>
+<available_directories>
+{formatted_directories}
+</available_directories>
 
-    <output_format>
-    Return ONLY a valid JSON object with:
-    - Keys: original file paths
-    - Values: suggested new file paths
-    
-    Example:
-    {{
-      "old/path/file.txt": "new/structured/path/file.txt",
-      "random_name.py": "core/utilities/random_name.py"
-    }}
-    </output_format>
+<output_format>
+Return ONLY a valid JSON object with:
+- Keys: original file paths
+- Values: new file paths that include an appropriate directory from the provided structure
 
-    <constraints>
-    - Maintain original filenames
-    - Ensure the structure matches your previous analysis
-    - Don't suggest unnecessary nesting (max 3-4 levels deep)
-    - The root directory of the proposed structure should be the same as the original structure
-    - Every original file must have a corresponding new path
-    </constraints>
-    """)
+Example:
+{{
+    "old_file.txt": "docs/old_file.txt",
+    "utils.py": "src/utils/utils.py",
+    "core.py": "src/core/core.py"
+}}
+</output_format>
+
+<constraints>
+- Every original file must have a corresponding new path
+- Use only the directories provided in the available_directories list
+- Maintain original filenames
+- Group similar files in the same directory
+- Consider file type, content, and purpose when deciding placement
+</constraints>
+"""
 
     # Add user's custom prompt if provided
     if prompt:
@@ -166,7 +187,7 @@ def _ai_generate_file_mapping(api_key: str, model: str, formatted_files: str, an
       "content": mapping_instructions
     }
 
-    # Get mapping from AI
+    # Get file mapping from AI
     completion_args = {
       "model": model,
       "api_key": api_key,
@@ -181,46 +202,19 @@ def _ai_generate_file_mapping(api_key: str, model: str, formatted_files: str, an
       
     response = completion(**completion_args)
     
-    return json.loads(response.choices[0].message.content), user_message
+    return response, user_message
 
-def validate_file_mapping(files: List[Dict[str, Any]], file_mapping: Dict[str, str], console=None) -> Dict[str, str]:
-    """Validates that the proposed file mapping includes all original files.
-    
-    Args:
-        files: List of file dictionaries containing path and other metadata
-        file_mapping: Dictionary mapping original file paths to proposed new paths
-        console: Optional rich console for output
-        
-    Returns:
-        The validated file mapping
-        
-    Raises:
-        MissingFilesError: If any files are missing from the proposed structure
-    """
-    if console is None:
-        console = Console()
-        
-    # Check for missing files
-    original_files = [file["path"] for file in files]
-    proposed_files = file_mapping.keys()
-    missing_files = set(original_files) - set(proposed_files)
-    
-    if missing_files:
-        raise MissingFilesError(missing_files)
-    
-    return file_mapping
 
-def build_file_mapping(files: List[Dict[str, Any]], api_key: str, model: str, debug: bool, console, port: int, prompt: str = None) -> Dict[str, str]:
-    """Generate a proposal for reorganizing file structure.
+    """Generate a file mapping using a two-step approach: first create directories, then map files.
     
     Args:
         files: List of file dictionaries containing path, size, extension, and last_modified
         api_key: API key for the LLM service
         model: LLM model identifier
+        port: Port number for Ollama API
+        prompt: Optional additional instructions for the AI
         debug: Whether to print AI responses to stdout
         console: Rich console for output
-        port: Port number for Ollama local inference
-        prompt: Optional additional instructions for the AI
         
     Returns:
         Dictionary mapping original file paths to proposed new paths
@@ -229,22 +223,25 @@ def build_file_mapping(files: List[Dict[str, Any]], api_key: str, model: str, de
         console = Console()
         
     # Format the files for AI processing
-    formatted_files_listing = _format_files_for_ai_context(files)
+    formatted_files_listing = format_files_for_ai_context(files)
 
-    # Step 1: Analyze file structure
-    analysis, analysis_user_message = _ai_analyze_file_tree(api_key, model, formatted_files_listing, port, prompt)
+    # Step 1: Generate directory structure
+    directories, dir_user_message = ai_generate_directory_structure(api_key, model, formatted_files_listing, port, prompt)
     if debug:
-        console.print("\n=== [bold blue]AI Structure Analysis - User Message[/bold blue] ===")
-        console.print(analysis_user_message["content"])
-        console.print("\n=== [bold blue]AI Structure Analysis - Response[/bold blue] ===")
-        console.print(analysis)
+        console.print("\n=== [bold blue]AI Directory Structure - User Message[/bold blue] ===")
+        console.print(dir_user_message["content"])
+        console.print("\n=== [bold blue]AI Directory Structure - Response[/bold blue] ===")
+        console.print_json(json.dumps(directories, indent=2))
     
-    # Step 2: Create file mapping based on analysis
-    file_mapping, mapping_user_message = _ai_generate_file_mapping(api_key, model, formatted_files_listing, analysis, port, prompt)
+    # Step 2: Map files to directories
+    file_mapping, mapping_user_message = ai_map_files_to_directories(api_key, model, formatted_files_listing, directories, port, prompt)
     if debug:
         console.print("\n=== [bold blue]AI File Mapping - User Message[/bold blue] ===")
         console.print(mapping_user_message["content"])
-        console.print("\n=== [bold blue]AI Proposed File Mapping - Response[/bold blue] ===")
+        console.print("\n=== [bold blue]AI File Mapping - Response[/bold blue] ===")
         console.print_json(json.dumps(file_mapping, indent=2))
     
     return file_mapping
+
+def validate_file_mapping(files: List[Dict[str, Any]], file_mapping: Dict[str, str], console: Console) -> None:
+    ...
