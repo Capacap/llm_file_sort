@@ -57,7 +57,7 @@ def validate_args(directory_path: str, debug: bool, model: str, api_key: str, ap
     
     return True
 
-def main(directory_path: str, model: str, debug: bool = False, api_key: str = None, api_key_env: str = None, port: int = None):
+def main(directory_path: str, model: str, debug: bool = False, api_key: str = None, api_key_env: str = None, port: int = None, prompt: str = None):
     """Main function for organizing files.
     
     Args:
@@ -67,6 +67,7 @@ def main(directory_path: str, model: str, debug: bool = False, api_key: str = No
         api_key: Direct API key for LLM service
         api_key_env: Name of environment variable containing API key
         port: Port for Ollama local inference
+        prompt: Optional additional instructions for the AI
     """
     # Create a shared console instance
     console = Console()
@@ -97,7 +98,7 @@ def main(directory_path: str, model: str, debug: bool = False, api_key: str = No
         sys.exit(0)
         
     # Generate the structure proposal
-    file_mapping = build_file_mapping(files, effective_api_key, model, debug, console, port)
+    file_mapping = build_file_mapping(files, effective_api_key, model, debug, console, port, prompt)
     
     # Validate the file mapping
     try:
@@ -136,8 +137,9 @@ if __name__ == "__main__":
     # parser.add_argument("--api-key", type=str, help="API key for LLM service")
     # parser.add_argument("--api-key-env", type=str, help="Name of environment variable containing API key")
     # parser.add_argument("--port", type=int, help="Port for Ollama local inference")
+    # parser.add_argument("--prompt", type=str, help="Additional instructions for the AI")
     # args = parser.parse_args()
-    # main(args.directory, args.model, args.debug, args.api_key, args.api_key_env, args.port)
+    # main(args.directory, args.model, args.debug, args.api_key, args.api_key_env, args.port, args.prompt)
 
     args = {
         "directory": "data/testing",
@@ -145,7 +147,8 @@ if __name__ == "__main__":
         "debug": True,
         "api_key": None,
         "api_key_env": "OPENAI_API_KEY",
-        "port": None
+        "port": None,
+        "prompt": "Organize the all text based files into a single folder called 'text_files' and the rest into a folder called 'other_files'"
     }
 
     main(
@@ -154,5 +157,6 @@ if __name__ == "__main__":
         args["debug"],
         args["api_key"],
         args["api_key_env"],
-        args["port"]
+        args["port"],
+        args["prompt"]
     )

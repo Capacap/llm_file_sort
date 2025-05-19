@@ -34,7 +34,7 @@ def _format_files_for_ai_context(files: List[Dict[str, Any]]) -> str:
     
     return json.dumps(result, indent=2)
 
-def _ai_analyze_file_tree(api_key: str, model: str, formatted_files: str, port: int) -> tuple:
+def _ai_analyze_file_tree(api_key: str, model: str, formatted_files: str, port: int, prompt: str = None) -> tuple:
     """Get AI analysis of the file structure.
     
     Args:
@@ -42,6 +42,7 @@ def _ai_analyze_file_tree(api_key: str, model: str, formatted_files: str, port: 
         model: LLM model identifier
         formatted_files: JSON string containing file metadata
         port: Port number for Ollama API
+        prompt: Optional additional instructions for the AI
         
     Returns:
         Tuple containing (analysis_text, user_message)
@@ -80,6 +81,10 @@ def _ai_analyze_file_tree(api_key: str, model: str, formatted_files: str, port: 
     </constraints>
     """)
 
+    # Add user's custom prompt if provided
+    if prompt:
+        analysis_instructions += f"\n\n<additional_instructions>\n{prompt}\n</additional_instructions>"
+
     # Define the user message
     user_message = {
       "role": "user",
@@ -102,7 +107,7 @@ def _ai_analyze_file_tree(api_key: str, model: str, formatted_files: str, port: 
     
     return response.choices[0].message.content, user_message
 
-def _ai_generate_file_mapping(api_key: str, model: str, formatted_files: str, analysis: str, port: int) -> tuple:
+def _ai_generate_file_mapping(api_key: str, model: str, formatted_files: str, analysis: str, port: int, prompt: str = None) -> tuple:
     """Create a mapping of original file paths to new paths based on analysis.
     
     Args:
@@ -111,6 +116,7 @@ def _ai_generate_file_mapping(api_key: str, model: str, formatted_files: str, an
         formatted_files: JSON string containing file metadata
         analysis: Previous analysis text from the LLM
         port: Port number for Ollama API
+        prompt: Optional additional instructions for the AI
         
     Returns:
         Tuple containing (file_mapping_dict, user_message)
@@ -149,6 +155,10 @@ def _ai_generate_file_mapping(api_key: str, model: str, formatted_files: str, an
     - Every original file must have a corresponding new path
     </constraints>
     """)
+
+    # Add user's custom prompt if provided
+    if prompt:
+        mapping_instructions += f"\n\n<additional_instructions>\n{prompt}\n</additional_instructions>"
 
     # Define the user message
     user_message = {
@@ -200,7 +210,7 @@ def validate_file_mapping(files: List[Dict[str, Any]], file_mapping: Dict[str, s
     
     return file_mapping
 
-def build_file_mapping(files: List[Dict[str, Any]], api_key: str, model: str, debug: bool, console, port: int) -> Dict[str, str]:
+def build_file_mapping(files: List[Dict[str, Any]], api_key: str, model: str, debug: bool, console, port: int, prompt: str = None) -> Dict[str, str]:
     """Generate a proposal for reorganizing file structure.
     
     Args:
@@ -210,6 +220,7 @@ def build_file_mapping(files: List[Dict[str, Any]], api_key: str, model: str, de
         debug: Whether to print AI responses to stdout
         console: Rich console for output
         port: Port number for Ollama local inference
+        prompt: Optional additional instructions for the AI
         
     Returns:
         Dictionary mapping original file paths to proposed new paths
@@ -221,7 +232,7 @@ def build_file_mapping(files: List[Dict[str, Any]], api_key: str, model: str, de
     formatted_files_listing = _format_files_for_ai_context(files)
 
     # Step 1: Analyze file structure
-    analysis, analysis_user_message = _ai_analyze_file_tree(api_key, model, formatted_files_listing, port)
+    analysis, analysis_user_message = _ai_analyze_file_tree(api_key, model, formatted_files_listing, port, prompt)
     if debug:
         console.print("\n=== [bold blue]AI Structure Analysis - User Message[/bold blue] ===")
         console.print(analysis_user_message["content"])
@@ -229,7 +240,7 @@ def build_file_mapping(files: List[Dict[str, Any]], api_key: str, model: str, de
         console.print(analysis)
     
     # Step 2: Create file mapping based on analysis
-    file_mapping, mapping_user_message = _ai_generate_file_mapping(api_key, model, formatted_files_listing, analysis, port)
+    file_mapping, mapping_user_message = _ai_generate_file_mapping(api_key, model, formatted_files_listing, analysis, port, prompt)
     if debug:
         console.print("\n=== [bold blue]AI File Mapping - User Message[/bold blue] ===")
         console.print(mapping_user_message["content"])
