@@ -2,7 +2,7 @@ import os
 import sys
 import json
 from rich.console import Console
-from src.file_utils import get_file_info_list, move_files, visualize_file_tree
+from src.file_utils import get_file_info_list, move_files, visualize_file_tree, clean_empty_directories
 from src.ai_utils import (
     format_files_for_ai_context, 
     format_directories_for_ai_context,
@@ -141,6 +141,7 @@ def main_two_step(kw_args: dict):
     root_dir = kw_args["directory"]
     absolute_mapping = {os.path.abspath(os.path.join(root_dir, old)): os.path.abspath(os.path.join(root_dir, new)) for old, new in file_mapping.items()}
     move_files(absolute_mapping, console=console)
+    clean_empty_directories(absolute_mapping, console=console)
 
 if __name__ == "__main__":
     args = {

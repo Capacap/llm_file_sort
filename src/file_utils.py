@@ -84,6 +84,63 @@ def move_files(file_mapping, console=None):
     
     return successful_moves, failed_moves
 
+def clean_empty_directories(file_mapping: Dict[str, str], console=None):
+    """
+    Check source file paths and remove any directories that are now empty after file movement.
+    
+    Args:
+        file_mapping: Dictionary mapping source paths to destination paths
+        console: Optional rich console for output. If None, a new console will be created.
+    
+    Returns:
+        int: Number of directories removed
+    """
+    if console is None:
+        console = Console()
+    
+    # Get unique source directories from the file mapping
+    source_dirs = set()
+    for source_path in file_mapping:
+        source_dir = os.path.dirname(source_path)
+        if source_dir:  # Skip if it's just a filename with no directory
+            source_dirs.add(source_dir)
+    
+    # Sort directories by depth (deepest first) to handle nested directories properly
+    sorted_dirs = sorted(source_dirs, key=lambda x: x.count(os.sep), reverse=True)
+    
+    removed_count = 0
+    
+    # Check each directory and remove if empty
+    for directory in sorted_dirs:
+        try:
+            # Check if directory exists and is empty
+            if os.path.exists(directory) and not os.listdir(directory):
+                os.rmdir(directory)
+                console.print(f"[yellow]Removed empty directory:[/yellow] {directory}")
+                removed_count += 1
+                
+                # Check parent directories recursively
+                parent = os.path.dirname(directory)
+                while parent and os.path.exists(parent):
+                    if not os.listdir(parent):
+                        os.rmdir(parent)
+                        console.print(f"[yellow]Removed empty parent directory:[/yellow] {parent}")
+                        removed_count += 1
+                        parent = os.path.dirname(parent)
+                    else:
+                        break
+        except PermissionError:
+            console.print(f"[red]Error:[/red] Permission denied when trying to remove directory: {directory}")
+        except Exception as e:
+            console.print(f"[red]Error:[/red] Failed to remove directory {directory}: {str(e)}")
+    
+    if removed_count > 0:
+        console.print(f"\n[bold]Cleanup:[/bold] Removed {removed_count} empty directories")
+    else:
+        console.print("\n[bold]Cleanup:[/bold] No empty directories to remove")
+    
+    return removed_count
+
 def visualize_file_tree(file_paths, console=None):
     """
     Create a minimal visualization of the directory structure using rich.
