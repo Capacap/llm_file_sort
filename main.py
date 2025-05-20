@@ -1,9 +1,7 @@
 """ML-powered file organization tool that maps files to appropriate directories."""
 import os
 from rich.console import Console
-from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TaskProgressColumn, TextColumn
-from rich.panel import Panel
 from rich.tree import Tree
 from rich.columns import Columns
 from src.file_utils import list_files_with_metadata, extract_text_content, encode_image_content, list_directories
@@ -86,6 +84,8 @@ def process_files_content(files, directory, model, api_key, debug=False, console
             progress.update(task, description=f"{file['relative_path']}")
             file_path = os.path.join(directory, file["relative_path"])
             
+            file["has_image_content"] = False
+            file["has_text_content"] = False
             if image_content := encode_image_content(file_path):
                 file["has_image_content"] = True
                 file["content_summary"] = ai_generate_image_caption(
@@ -209,6 +209,14 @@ def main(kw_args):
     console = Console()
     root_dir = os.path.abspath(kw_args["directory"])
     
+    # Load API key from environment if not provided
+    if kw_args["api_key"] is None and kw_args["api_key_env"]:
+        kw_args["api_key"] = os.environ.get(kw_args["api_key_env"])
+        # Only warn if an environment variable was specified but not found
+        if not kw_args["api_key"]:
+            console.print(f"\n[bold yellow]Warning: Environment variable {kw_args['api_key_env']} not found or empty.[/]")
+            console.print("[yellow]Continuing without API key - this may work for local models.[/]")
+    
     # Load files and generate content summaries
     console.print("\n[bold blue]Generating content summaries...[/]")
     files = list_files_with_metadata(kw_args["directory"])
@@ -274,11 +282,11 @@ if __name__ == "__main__":
     args = {
         "directory": "data/testing",
         "model": "gpt-4.1-nano",  
-        "debug": True,
+        "debug": False,
         "api_key": None,
         "api_key_env": "OPENAI_API_KEY",
         "port": None,
-        "prompt": "Sort all files with text content into the text directory and all other files into the misc directory",
+        "prompt": "Separate all files with text content, image content, and others into different directories",
         "clean_up": True
     }
 
