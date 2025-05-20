@@ -83,7 +83,7 @@ def process_files_content(files, directory, model, api_key, debug=False, console
         for file in files:
             progress.update(task, description=f"{file['relative_path']}")
             file_path = os.path.join(directory, file["relative_path"])
-            
+
             file["has_image_content"] = False
             file["has_text_content"] = False
             if image_content := encode_image_content(file_path):
@@ -146,9 +146,9 @@ def display_validation_issues(validation, console=None):
             console.print(f"[yellow]Exists: {dst}[/]")
     
     if has_issues:
-        console.print("\n[bold yellow]Warning: Issues found in file mapping.[/]")
+        console.print("[bold yellow]Warning: Issues found in file mapping.[/]")
     else:
-        console.print("\n[bold green]✓ File mapping validation successful![/]")
+        console.print("[bold green]✓ File mapping validation successful![/]")
     
     return has_issues
 
@@ -241,7 +241,6 @@ def main(kw_args):
     current_tree = build_file_tree(absolute_file_mapping.keys(), "Current Organization", "yellow", root_dir)
     proposed_tree = build_file_tree(absolute_file_mapping.values(), "Proposed Organization", "green", root_dir)
     
-    console.print("\n")
     console.print(Columns([current_tree, proposed_tree]))
     
     # Check if changes needed
