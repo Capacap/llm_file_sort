@@ -274,7 +274,6 @@ def main(kw_args):
                 console.print(f"[blue]{src} -> {dst}[/]")
 
         # Create absolute path mappings
-        console.print("\n[bold blue]Generating absolute file mappings...[/]")
         absolute_file_mapping = {
             os.path.join(root_dir, rel_src): os.path.join(root_dir, rel_dst.lstrip('/'), os.path.basename(rel_src)) 
             for rel_src, rel_dst in relative_file_mapping.items()
@@ -285,6 +284,11 @@ def main(kw_args):
             for src, dst in absolute_file_mapping.items():
                 console.print(f"[blue]{src} -> {dst}[/]")
 
+        # Validate mapping and show issues
+        console.print("\n[bold blue]Validating file mapping...[/]")
+        validation = validate_file_mapping(absolute_file_mapping)
+        has_issues = display_validation_issues(validation, console)
+        
         # Visualize current and proposed organization
         current_tree = build_file_tree(absolute_file_mapping.keys(), "Current Organization", "yellow", root_dir)
         proposed_tree = build_file_tree(absolute_file_mapping.values(), "Proposed Organization", "green", root_dir)
@@ -295,11 +299,6 @@ def main(kw_args):
         if not changes_needed:
             console.print("\n[bold green]No file organization changes needed.[/]")
             return
-        
-        # Validate mapping and show issues
-        console.print("\n[bold blue]Validating file mapping...[/]")
-        validation = validate_file_mapping(absolute_file_mapping)
-        has_issues = display_validation_issues(validation, console)
             
         # Get confirmation and apply changes
         if console.input("\n[bold cyan]Apply changes? (y/n): [/]").lower() != "y":
@@ -327,7 +326,7 @@ def main(kw_args):
         console.print("[yellow]Suggestions:[/]")
         console.print(" • Check your API key\n • Verify port number if using a local model\n • Ensure the model server is running\n • Check your internet connection")
         sys.exit(1)
-        
+
     except AIUtilsError as e:
         console.print(Panel(f"[bold red]AI Processing Error: {str(e)}[/]", title="Error", border_style="red"))
         sys.exit(1)
@@ -341,16 +340,19 @@ def main(kw_args):
         sys.exit(1)
 
 if __name__ == "__main__":
-    args = {
-        "directory": "data/testing",
-        "model": "ollama/gemma3:4b",  
-        "debug": True,
-        "api_key": None,
-        "api_key_env": None,
-        "port": None,
-        "prompt": "Separate all files with text content, image content, and others into different directories. Keep the hierarchy as shallow as possible.",
-        "clean_up": True,
-        "custom_directories": "documents images videos audio",
-    }
-
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="ML-powered file organization tool")
+    parser.add_argument("-d", "--directory", default="data/testing", help="Directory to organize")
+    parser.add_argument("-m", "--model", default="ollama/gemma3:4b", help="AI model to use")
+    parser.add_argument("-c", "--custom-directories", help="Space-separated list of custom directories")
+    parser.add_argument("-p", "--prompt", help="Custom prompt for file mapping")
+    parser.add_argument("--debug", action="store_true", help="Enable debug output")
+    parser.add_argument("--api-key", help="API key for the model")
+    parser.add_argument("--api-key-env", help="Environment variable containing the API key")
+    parser.add_argument("--port", type=int, help="Port for local model server")
+    parser.add_argument("--no-cleanup", dest="clean_up", action="store_false", help="Disable cleanup of empty directories")
+    parser.set_defaults(clean_up=True)
+    
+    args = vars(parser.parse_args())
     main(args)
