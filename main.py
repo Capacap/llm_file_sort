@@ -250,8 +250,7 @@ def main(kw_args):
     console.print(Columns([current_tree, proposed_tree]))
     
     # Check if changes needed
-    changes_needed = any(os.path.normpath(src) != os.path.normpath(dst) 
-                        for src, dst in absolute_file_mapping.items())
+    changes_needed = any(os.path.normpath(src) != os.path.normpath(dst) for src, dst in absolute_file_mapping.items())
     if not changes_needed:
         console.print("\n[bold green]No file organization changes needed.[/]")
         return
