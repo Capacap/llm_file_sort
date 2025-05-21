@@ -1,13 +1,19 @@
 """ML-powered file organization tool that maps files to appropriate directories."""
+# --- Imports ---
 import os
+import sys
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TaskProgressColumn, TextColumn
 from rich.tree import Tree
 from rich.columns import Columns
+from rich.panel import Panel
 from src.file_utils import list_files_with_metadata, extract_text_content, encode_image_content, list_directories
-from src.ai_utils import ai_generate_image_caption, ai_generate_text_summary, ai_map_file_to_directory
+from src.ai_utils import (
+    ai_generate_image_caption, ai_generate_text_summary, ai_map_file_to_directory,
+    AIUtilsError, ImageProcessingError, TextProcessingError, MappingError, ModelConnectionError
+)
 
-
+# --- Validation functions ---
 def validate_file_mapping(mapping):
     """Validate file mapping for potential issues."""
     validation_results = {
@@ -28,17 +34,13 @@ def validate_file_mapping(mapping):
             dest_paths[norm_dst] = src
     
     # Check missing source files and existing destinations
-    for src in mapping.keys():
-        if not os.path.exists(src):
-            validation_results["source_missing"].append(src)
-    
-    for src, dst in mapping.items():
-        if os.path.exists(dst) and os.path.normpath(src) != os.path.normpath(dst):
-            validation_results["destination_exists"].append(dst)
+    validation_results["source_missing"] = [src for src in mapping.keys() if not os.path.exists(src)]
+    validation_results["destination_exists"] = [dst for src, dst in mapping.items() 
+                                               if os.path.exists(dst) and os.path.normpath(src) != os.path.normpath(dst)]
     
     return validation_results
 
-
+# --- Visualization functions ---
 def build_file_tree(paths, title, style, root_dir):
     """Create a tree visualization of file structure."""
     # Build dictionary representation of file tree
@@ -72,10 +74,11 @@ def build_file_tree(paths, title, style, root_dir):
     add_to_tree(file_dict, tree)
     return tree
 
-
-def process_files_content(files, directory, model, api_key, debug=False, console=None):
+# --- Content processing ---
+def process_files_content(files, directory, model, api_key, port=None, debug=False, console=None):
     """Process files to generate content summaries."""
     console = console or Console()
+    error_count = 0
     
     with Progress(SpinnerColumn(), TaskProgressColumn(), TextColumn("- {task.description}"), console=console) as progress:
         task = progress.add_task("Processing files", total=len(files))
@@ -83,43 +86,72 @@ def process_files_content(files, directory, model, api_key, debug=False, console
         for file in files:
             progress.update(task, description=f"{file['relative_path']}")
             file_path = os.path.join(directory, file["relative_path"])
+            file["content_summary"] = "No summary available."
 
-            file["has_image_content"] = False
-            file["has_text_content"] = False
-            if image_content := encode_image_content(file_path):
-                file["has_image_content"] = True
-                file["content_summary"] = ai_generate_image_caption(
-                    image_content, file["extension"], model, api_key, debug=debug)
-            elif text_content := extract_text_content(file_path, 1024):
-                file["has_text_content"] = True
-                file["content_summary"] = ai_generate_text_summary(
-                    text_content, model, api_key, debug=debug)
-            else:
-                file["content_summary"] = "No summary available."
+            try:
+                if image_content := encode_image_content(file_path):
+                    file["has_image_content"] = True
+                    file["content_summary"] = ai_generate_image_caption(
+                        image_content, file["extension"], model, api_key, port=port, debug=debug)
+                elif text_content := extract_text_content(file_path, 1024):
+                    file["has_text_content"] = True
+                    file["content_summary"] = ai_generate_text_summary(
+                        text_content, model, api_key, port=port, debug=debug)
+            except ImageProcessingError as e:
+                error_count += 1
+                console.print(f"[yellow]Warning: Could not process image {file['relative_path']}: {str(e)}[/]")
+            except TextProcessingError as e:
+                error_count += 1
+                console.print(f"[yellow]Warning: Could not process text {file['relative_path']}: {str(e)}[/]")
+            except ModelConnectionError as e:
+                error_count += 1
+                console.print(f"[red]Error: Model connection issue while processing {file['relative_path']}: {str(e)}[/]")
+            except AIUtilsError as e:
+                error_count += 1
+                console.print(f"[red]Error: AI processing failed for {file['relative_path']}: {str(e)}[/]")
+            except Exception as e:
+                error_count += 1
+                console.print(f"[red]Unexpected error processing {file['relative_path']}: {str(e)}[/]")
                 
             progress.advance(task)
     
+    if error_count > 0:
+        console.print(f"[yellow]Completed with {error_count} warnings/errors[/]")
+    
     return files
 
-
-def map_files_to_directories(files, directory_structure, model, api_key, prompt=None, debug=False, console=None):
+# --- File mapping ---
+def map_files_to_directories(files, directory_structure, model, api_key, port=None, prompt=None, debug=False, console=None):
     """Map files to appropriate directories using AI."""
     console = console or Console()
     relative_file_mapping = {}
+    error_count = 0
     
     with Progress(SpinnerColumn(), TaskProgressColumn(), TextColumn("- {task.description}"), console=console) as progress:
         task = progress.add_task("Mapping files", total=len(files))
         
         for file in files:
             progress.update(task, description=f"{file['relative_path']}")
-            mapped_file = ai_map_file_to_directory(
-                file, directory_structure, model, api_key, prompt, debug=debug)
-            relative_file_mapping.update(mapped_file)
+            try:
+                mapped_file = ai_map_file_to_directory(
+                    file, directory_structure, model, api_key, port=port, prompt=prompt, debug=debug)
+                relative_file_mapping.update(mapped_file)
+            except (MappingError, ModelConnectionError, AIUtilsError, Exception) as e:
+                error_count += 1
+                error_type = "Warning" if isinstance(e, MappingError) else "Error"
+                error_color = "yellow" if isinstance(e, MappingError) else "red"
+                console.print(f"[{error_color}]{error_type}: {type(e).__name__} for {file['relative_path']}: {str(e)}[/]")
+                # Add a default mapping to keep the file where it is
+                relative_file_mapping[file["relative_path"]] = os.path.dirname(file["relative_path"])
+                
             progress.advance(task)
     
+    if error_count > 0:
+        console.print(f"[yellow]Mapping completed with {error_count} warnings/errors[/]")
+        
     return relative_file_mapping
 
-
+# --- Result visualization ---
 def display_validation_issues(validation, console=None):
     """Display validation issues found in file mapping."""
     console = console or Console()
@@ -145,14 +177,12 @@ def display_validation_issues(validation, console=None):
         for dst in validation["destination_exists"]:
             console.print(f"[yellow]Exists: {dst}[/]")
     
-    if has_issues:
-        console.print("[bold yellow]Warning: Issues found in file mapping.[/]")
-    else:
-        console.print("[bold green]✓ File mapping validation successful![/]")
+    console.print("[bold green]✓ File mapping validation successful![/]" if not has_issues else 
+                 "[bold yellow]Warning: Issues found in file mapping.[/]")
     
     return has_issues
 
-
+# --- File operations ---
 def move_files(file_mapping, console=None):
     """Move files according to the provided mapping."""
     console = console or Console()
@@ -184,7 +214,6 @@ def move_files(file_mapping, console=None):
     
     return moved, skipped, errors
 
-
 def cleanup_empty_dirs(root_dir, console=None):
     """Remove empty directories under the given root directory."""
     console = console or Console()
@@ -204,91 +233,120 @@ def cleanup_empty_dirs(root_dir, console=None):
     console.print(f"[green]Removed {removed_count} empty directories[/]")
     return removed_count
 
-
+# --- Main application logic ---
 def main(kw_args):
     console = Console()
-    root_dir = os.path.abspath(kw_args["directory"])
-    
-    # Load API key from environment if not provided
-    if kw_args["api_key"] is None and kw_args["api_key_env"]:
-        kw_args["api_key"] = os.environ.get(kw_args["api_key_env"])
-        # Only warn if an environment variable was specified but not found
-        if not kw_args["api_key"]:
-            console.print(f"\n[bold yellow]Warning: Environment variable {kw_args['api_key_env']} not found or empty.[/]")
-            console.print("[yellow]Continuing without API key - this may work for local models.[/]")
-    
-    # Load files and generate content summaries
-    console.print("\n[bold blue]Generating content summaries...[/]")
-    files = list_files_with_metadata(kw_args["directory"])
-    files = process_files_content(files, kw_args["directory"], kw_args["model"], kw_args["api_key"], kw_args["debug"], console)
-    
-    # Map files to directories
-    console.print("\n[bold blue]Generating file mappings...[/]")
-    directory_structure = list_directories(kw_args["directory"])
-
-    # Replace directory structure with custom directories if specified
-    if "custom_directories" in kw_args and kw_args["custom_directories"]:
-        custom_dirs = kw_args["custom_directories"].split()
-        directory_structure = custom_dirs
-        console.print(f"[green]Replaced directory structure with {len(custom_dirs)} custom directories[/]")
-
-    # Create relative path mappings
-    relative_file_mapping = map_files_to_directories(
-        files, directory_structure, kw_args["model"], kw_args["api_key"], 
-        kw_args.get("prompt"), kw_args["debug"], console)
-
-    # Create absolute path mappings
-    console.print("\n[bold blue]Generating absolute file mappings...[/]")
-    absolute_file_mapping = {
-        os.path.join(root_dir, rel_src): os.path.join(root_dir, rel_dst.lstrip('/'), os.path.basename(rel_src))
-        for rel_src, rel_dst in relative_file_mapping.items()
-    }
-    
-    # Visualize current and proposed organization
-    current_tree = build_file_tree(absolute_file_mapping.keys(), "Current Organization", "yellow", root_dir)
-    proposed_tree = build_file_tree(absolute_file_mapping.values(), "Proposed Organization", "green", root_dir)
-    console.print(Columns([current_tree, proposed_tree]))
-    
-    # Check if changes needed
-    changes_needed = any(os.path.normpath(src) != os.path.normpath(dst) for src, dst in absolute_file_mapping.items())
-    if not changes_needed:
-        console.print("\n[bold green]No file organization changes needed.[/]")
-        return
-    
-    # Validate mapping and show issues
-    console.print("\n[bold blue]Validating file mapping...[/]")
-    validation = validate_file_mapping(absolute_file_mapping)
-    has_issues = display_validation_issues(validation, console)
+    try:
+        root_dir = os.path.abspath(kw_args["directory"])
         
-    # Get confirmation and apply changes
-    if console.input("\n[bold cyan]Apply changes? (y/n): [/]").lower() != "y":
-        console.print("[yellow]Operation canceled.[/]")
-        return
+        # Load API key from environment if not provided
+        if kw_args["api_key"] is None and kw_args["api_key_env"]:
+            kw_args["api_key"] = os.environ.get(kw_args["api_key_env"])
+            if not kw_args["api_key"]:
+                console.print(f"\n[bold yellow]Warning: Environment variable {kw_args['api_key_env']} not found or empty.[/]")
+                console.print("[yellow]Continuing without API key - this may work for local models.[/]")
+        
+        # Process file content
+        console.print("\n[bold blue]Generating content summaries...[/]")
+        files = process_files_content(
+            list_files_with_metadata(kw_args["directory"]), 
+            kw_args["directory"], kw_args["model"], kw_args["api_key"], 
+            port=kw_args.get("port"), debug=kw_args["debug"], console=console
+        )
+        
+        # Generate file mappings
+        console.print("\n[bold blue]Generating file mappings...[/]")
+        directory_structure = kw_args["custom_directories"].split() if "custom_directories" in kw_args and kw_args["custom_directories"] else list_directories(kw_args["directory"])
+        
+        if "custom_directories" in kw_args and kw_args["custom_directories"]:
+            console.print(f"[green]Using {len(directory_structure)} custom directories[/]")
 
-    # Move files
-    console.print("\n[bold blue]Moving files...[/]")
-    moved, skipped, errors = move_files(absolute_file_mapping, console)
-    
-    # Operation summary
-    console.print("\n[bold blue]Operation Summary:[/]")
-    console.print(f"[green]Files moved: {moved}[/]")
-    console.print(f"[yellow]Files skipped: {skipped}[/]")
-    if errors > 0:
-        console.print(f"[red]Errors: {errors}[/]")
+        # Map files to directories
+        relative_file_mapping = map_files_to_directories(
+            files, directory_structure, kw_args["model"], kw_args["api_key"], 
+            port=kw_args.get("port"), prompt=kw_args.get("prompt"), 
+            debug=kw_args["debug"], console=console
+        )
 
-    # Clean up empty directories
-    if kw_args["clean_up"]:
-        console.print("\n[bold blue]Cleaning up empty directories...[/]")
-        cleanup_empty_dirs(root_dir, console)
+        if kw_args["debug"]:
+            console.print("\n[bold blue]Relative file mappings:[/]")
+            for src, dst in relative_file_mapping.items():
+                console.print(f"[blue]{src} -> {dst}[/]")
 
+        # Create absolute path mappings
+        console.print("\n[bold blue]Generating absolute file mappings...[/]")
+        absolute_file_mapping = {
+            os.path.join(root_dir, rel_src): os.path.join(root_dir, rel_dst.lstrip('/'), os.path.basename(rel_src)) 
+            for rel_src, rel_dst in relative_file_mapping.items()
+        }
+        
+        if kw_args["debug"]:
+            console.print("\n[bold blue]Absolute file mappings:[/]")
+            for src, dst in absolute_file_mapping.items():
+                console.print(f"[blue]{src} -> {dst}[/]")
+
+        # Visualize current and proposed organization
+        current_tree = build_file_tree(absolute_file_mapping.keys(), "Current Organization", "yellow", root_dir)
+        proposed_tree = build_file_tree(absolute_file_mapping.values(), "Proposed Organization", "green", root_dir)
+        console.print(Columns([current_tree, proposed_tree]))
+        
+        # Check if changes needed
+        changes_needed = any(os.path.normpath(src) != os.path.normpath(dst) for src, dst in absolute_file_mapping.items())
+        if not changes_needed:
+            console.print("\n[bold green]No file organization changes needed.[/]")
+            return
+        
+        # Validate mapping and show issues
+        console.print("\n[bold blue]Validating file mapping...[/]")
+        validation = validate_file_mapping(absolute_file_mapping)
+        has_issues = display_validation_issues(validation, console)
+            
+        # Get confirmation and apply changes
+        if console.input("\n[bold cyan]Apply changes? (y/n): [/]").lower() != "y":
+            console.print("[yellow]Operation canceled.[/]")
+            return
+
+        # Move files
+        console.print("\n[bold blue]Moving files...[/]")
+        moved, skipped, errors = move_files(absolute_file_mapping, console)
+        
+        # Operation summary
+        console.print("\n[bold blue]Operation Summary:[/]")
+        console.print(f"[green]Files moved: {moved}[/]")
+        console.print(f"[yellow]Files skipped: {skipped}[/]")
+        if errors > 0:
+            console.print(f"[red]Errors: {errors}[/]")
+
+        # Clean up empty directories
+        if kw_args["clean_up"]:
+            console.print("\n[bold blue]Cleaning up empty directories...[/]")
+            cleanup_empty_dirs(root_dir, console)
+            
+    except ModelConnectionError as e:
+        console.print(Panel(f"[bold red]Model Connection Error: {str(e)}[/]", title="Error", border_style="red"))
+        console.print("[yellow]Suggestions:[/]")
+        console.print(" • Check your API key\n • Verify port number if using a local model\n • Ensure the model server is running\n • Check your internet connection")
+        sys.exit(1)
+        
+    except AIUtilsError as e:
+        console.print(Panel(f"[bold red]AI Processing Error: {str(e)}[/]", title="Error", border_style="red"))
+        sys.exit(1)
+
+    except Exception as e:
+        console.print(Panel(f"[bold red]Unexpected Error: {str(e)}[/]", title="Error", border_style="red"))
+        if kw_args["debug"]:
+            import traceback
+            console.print("[red]Traceback:[/]")
+            console.print(traceback.format_exc())
+        sys.exit(1)
 
 if __name__ == "__main__":
     args = {
         "directory": "data/testing",
-        "model": "gpt-4.1-nano",  
-        "debug": False,
+        "model": "ollama/gemma3:4b",  
+        "debug": True,
         "api_key": None,
-        "api_key_env": "OPENAI_API_KEY",
+        "api_key_env": None,
         "port": None,
         "prompt": "Separate all files with text content, image content, and others into different directories. Keep the hierarchy as shallow as possible.",
         "clean_up": True,
