@@ -19,7 +19,6 @@ class TextProcessingError(AIUtilsError): """Exception raised for errors during t
 class MappingError(AIUtilsError): """Exception raised for errors during file mapping."""
 class ModelConnectionError(AIUtilsError): """Exception raised for errors connecting to the model API."""
 
-# --- Helper functions ---
 def _handle_api_exceptions(e, retries, max_retries, retry_delay, debug=False):
     """Handle common API exceptions with retry logic."""
     if isinstance(e, (RateLimitError, Timeout, ServiceUnavailableError)) and retries < max_retries:
@@ -43,7 +42,6 @@ def _handle_api_exceptions(e, retries, max_retries, retry_delay, debug=False):
     else:
         return False
     
-# --- Image caption generation ---
 def ai_generate_image_caption(encoded_image_content, file_extension, model, api_key, port=None, debug=False, max_retries=2, retry_delay=1):
     """Generate a caption for an image using an AI model."""
     # Validate image format and content
@@ -111,7 +109,6 @@ Describe this image in 1-2 short sentences.
                 continue
             raise AIUtilsError(f"Unexpected error generating image caption: {str(e)}")
 
-# --- Text summary generation ---
 def ai_generate_text_summary(text_content, model, api_key, port=None, debug=False, max_retries=2, retry_delay=1):
     """Generate a summary for text content using an AI model."""
     if not text_content or not isinstance(text_content, str):
@@ -175,7 +172,6 @@ Summarize the following text in 1-2 sentences. Focus on key information only.
                 continue
             raise AIUtilsError(f"Unexpected error generating text summary: {str(e)}")
 
-# --- File mapping ---
 def ai_map_file_to_directory(file_info, directories, model, api_key, port=None, prompt=None, debug=False, max_retries=2, retry_delay=1):
     """Map a file to the most appropriate directory using an AI model."""
     # Validate inputs

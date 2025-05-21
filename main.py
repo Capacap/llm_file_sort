@@ -13,7 +13,6 @@ from src.ai_utils import (
     AIUtilsError, ImageProcessingError, TextProcessingError, MappingError, ModelConnectionError
 )
 
-# --- Validation functions ---
 def validate_file_mapping(mapping):
     """Validate file mapping for potential issues."""
     validation_results = {
@@ -40,7 +39,6 @@ def validate_file_mapping(mapping):
     
     return validation_results
 
-# --- Visualization functions ---
 def build_file_tree(paths, title, style, root_dir):
     """Create a tree visualization of file structure."""
     # Build dictionary representation of file tree
@@ -74,7 +72,6 @@ def build_file_tree(paths, title, style, root_dir):
     add_to_tree(file_dict, tree)
     return tree
 
-# --- Content processing ---
 def process_files_content(files, directory, model, api_key, port=None, debug=False, console=None):
     """Process files to generate content summaries."""
     console = console or Console()
@@ -99,10 +96,10 @@ def process_files_content(files, directory, model, api_key, port=None, debug=Fal
                         text_content, model, api_key, port=port, debug=debug)
             except ImageProcessingError as e:
                 error_count += 1
-                console.print(f"[yellow]Warning: Could not process image {file['relative_path']}: {str(e)}[/]")
+                console.print(f"[yellow]Warning: Could not caption image {file['relative_path']}: {str(e)}[/]")
             except TextProcessingError as e:
                 error_count += 1
-                console.print(f"[yellow]Warning: Could not process text {file['relative_path']}: {str(e)}[/]")
+                console.print(f"[yellow]Warning: Could not summarize text {file['relative_path']}: {str(e)}[/]")
             except ModelConnectionError as e:
                 error_count += 1
                 console.print(f"[red]Error: Model connection issue while processing {file['relative_path']}: {str(e)}[/]")
@@ -120,7 +117,6 @@ def process_files_content(files, directory, model, api_key, port=None, debug=Fal
     
     return files
 
-# --- File mapping ---
 def map_files_to_directories(files, directory_structure, model, api_key, port=None, prompt=None, debug=False, console=None):
     """Map files to appropriate directories using AI."""
     console = console or Console()
@@ -151,7 +147,6 @@ def map_files_to_directories(files, directory_structure, model, api_key, port=No
         
     return relative_file_mapping
 
-# --- Result visualization ---
 def display_validation_issues(validation, console=None):
     """Display validation issues found in file mapping."""
     console = console or Console()
@@ -182,7 +177,6 @@ def display_validation_issues(validation, console=None):
     
     return has_issues
 
-# --- File operations ---
 def move_files(file_mapping, console=None):
     """Move files according to the provided mapping."""
     console = console or Console()
@@ -233,7 +227,6 @@ def cleanup_empty_dirs(root_dir, console=None):
     console.print(f"[green]Removed {removed_count} empty directories[/]")
     return removed_count
 
-# --- Main application logic ---
 def main(kw_args):
     console = Console(no_color=kw_args.get("no_color", False))
     try:
