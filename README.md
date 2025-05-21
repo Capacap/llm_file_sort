@@ -59,6 +59,55 @@ python main.py -d ~/Pictures -m local/model --port 11434 -c photos,documents,wor
 - Rich (terminal UI)
 - Model-specific dependencies (OpenAI, Ollama, etc.)
 
+## Example Run
+```bash
+python3 main.py -d ~/Downloads -c cats,dogs,robots -m openai/gpt-4.1-nano --api-key-env OPENAI_API_KEY
+
+Generating content summaries...
+  100% - 239424fba61197893d898c5223ea6d3c.jpg
+
+Generating file mappings...
+Using 3 custom directories
+  100% - 239424fba61197893d898c5223ea6d3c.jpg
+
+Validating file mapping...
+✓ File mapping validation successful!
+
+Current Organization: Downloads             
+├── 97d3256c38a8cb7bfda0b21e67d15d72.jpg    
+├── d5b2d5ad21dbc827fe1255098ef085fa.jpg    
+├── ea18927ba4a8064856762d7b266767b5.jpg    
+├── ab40844dca96aa27b7e8ebe7edeee22e.jpg    
+├── f921181b1ee259a1303db879e1a3593f.jpg    
+├── affcac4e345f82968eab52dc2b5b3399.jpg    
+└── 239424fba61197893d898c5223ea6d3c.jpg
+    
+Proposed Organization: Downloads            
+├── cats/                                   
+│   ├── d5b2d5ad21dbc827fe1255098ef085fa.jpg
+│   └── affcac4e345f82968eab52dc2b5b3399.jpg
+├── dogs/                                   
+│   ├── ea18927ba4a8064856762d7b266767b5.jpg
+│   └── 239424fba61197893d898c5223ea6d3c.jpg
+└── robots/                                 
+    ├── 97d3256c38a8cb7bfda0b21e67d15d72.jpg
+    ├── ab40844dca96aa27b7e8ebe7edeee22e.jpg
+    └── f921181b1ee259a1303db879e1a3593f.jpg
+
+Apply changes? (y/n): y
+
+Moving files...
+  100% - Moving: 239424fba61197893d898c5223ea6d3c.jpg
+
+Operation Summary:
+Files moved: 7
+Files skipped: 0
+
+Cleaning up empty directories...
+Removed 0 empty directories
+
+```
+
 ## License
 
 MIT License
