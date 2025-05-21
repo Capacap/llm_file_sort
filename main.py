@@ -449,6 +449,15 @@ Examples:
         print(f"Error: Directory not found: {args.directory}")
         sys.exit(1)
     
+    # Validate custom directories format
+    if args.custom_directories:
+        dirs = args.custom_directories.split(",")
+        if len(dirs) == 1 and " " in args.custom_directories:
+            print(f"Error: Invalid custom directories format: '{args.custom_directories}'")
+            print("Use comma-separated format without spaces between directory names.")
+            print("Example: docs,images,videos")
+            sys.exit(1)
+    
     # Save config if requested
     if args.save_config:
         config_data = {k: v for k, v in vars(args).items() 
