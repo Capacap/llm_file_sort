@@ -72,7 +72,7 @@ def build_file_tree(paths, title, style, root_dir):
     add_to_tree(file_dict, tree)
     return tree
 
-def process_files_content(files, directory, model, api_key, port=None, debug=False, console=None):
+def process_files_content(files, directory, model, api_key, port=None, verbose=False, console=None):
     """Process files to generate content summaries."""
     console = console or Console()
     error_count = 0
@@ -89,11 +89,11 @@ def process_files_content(files, directory, model, api_key, port=None, debug=Fal
                 if image_content := encode_image_content(file_path):
                     file["has_image_content"] = True
                     file["content_summary"] = ai_generate_image_caption(
-                        image_content, file["extension"], model, api_key, port=port, debug=debug)
+                        image_content, file["extension"], model, api_key, port=port, debug=verbose)
                 elif text_content := extract_text_content(file_path, 1024):
                     file["has_text_content"] = True
                     file["content_summary"] = ai_generate_text_summary(
-                        text_content, model, api_key, port=port, debug=debug)
+                        text_content, model, api_key, port=port, debug=verbose)
             except ImageProcessingError as e:
                 error_count += 1
                 console.print(f"[yellow]Warning: Could not caption image {file['relative_path']}: {str(e)}[/]")
@@ -117,7 +117,7 @@ def process_files_content(files, directory, model, api_key, port=None, debug=Fal
     
     return files
 
-def map_files_to_directories(files, directory_structure, model, api_key, port=None, prompt=None, debug=False, console=None):
+def map_files_to_directories(files, directory_structure, model, api_key, port=None, prompt=None, verbose=False, console=None):
     """Map files to appropriate directories using AI."""
     console = console or Console()
     relative_file_mapping = {}
@@ -130,7 +130,7 @@ def map_files_to_directories(files, directory_structure, model, api_key, port=No
             progress.update(task, description=f"{file['relative_path']}")
             try:
                 mapped_file = ai_map_file_to_directory(
-                    file, directory_structure, model, api_key, port=port, prompt=prompt, debug=debug)
+                    file, directory_structure, model, api_key, port=port, prompt=prompt, debug=verbose)
                 relative_file_mapping.update(mapped_file)
             except (MappingError, ModelConnectionError, AIUtilsError, Exception) as e:
                 error_count += 1
@@ -244,7 +244,7 @@ def main(kw_args):
         files = process_files_content(
             list_files_with_metadata(kw_args["directory"]), 
             kw_args["directory"], kw_args["model"], kw_args["api_key"], 
-            port=kw_args.get("port"), debug=kw_args["debug"], console=console
+            port=kw_args.get("port"), verbose=kw_args["verbose"], console=console
         )
         
         # Generate file mappings
@@ -258,10 +258,10 @@ def main(kw_args):
         relative_file_mapping = map_files_to_directories(
             files, directory_structure, kw_args["model"], kw_args["api_key"], 
             port=kw_args.get("port"), prompt=kw_args.get("prompt"), 
-            debug=kw_args["debug"], console=console
+            verbose=kw_args["verbose"], console=console
         )
 
-        if kw_args["debug"]:
+        if kw_args["verbose"]:
             console.print("\n[bold blue]Relative file mappings:[/]")
             for src, dst in relative_file_mapping.items():
                 console.print(f"[blue]{src} -> {dst}[/]")
@@ -272,7 +272,7 @@ def main(kw_args):
             for rel_src, rel_dst in relative_file_mapping.items()
         }
         
-        if kw_args["debug"]:
+        if kw_args["verbose"]:
             console.print("\n[bold blue]Absolute file mappings:[/]")
             for src, dst in absolute_file_mapping.items():
                 console.print(f"[blue]{src} -> {dst}[/]")
@@ -293,11 +293,6 @@ def main(kw_args):
             console.print("\n[bold green]No file organization changes needed.[/]")
             return
             
-        # Handle dry run mode
-        if kw_args.get("dry_run", False):
-            console.print("\n[bold yellow]Dry run mode - no changes will be made.[/]")
-            return
-
         # Get confirmation and apply changes
         if console.input("\n[bold cyan]Apply changes? (y/n): [/]").lower() != "y":
             console.print("[yellow]Operation canceled.[/]")
@@ -331,37 +326,29 @@ def main(kw_args):
 
     except Exception as e:
         console.print(Panel(f"[bold red]Unexpected Error: {str(e)}[/]", title="Error", border_style="red"))
-        if kw_args["debug"]:
+        if kw_args["verbose"]:
             import traceback
             console.print("[red]Traceback:[/]")
             console.print(traceback.format_exc())
         sys.exit(1)
 
 if __name__ == "__main__":
-    import argparse, os, json, sys
+    import argparse, os, sys
     from pathlib import Path
     
     VERSION = "1.0.0"
     
-    # Load config from file or environment
-    config = {}
-    for path in [os.path.expanduser("~/.llm_file_organizer.json"), ".llm_file_organizer.json"]:
-        if os.path.exists(path):
-            try:
-                with open(path) as f:
-                    config = json.load(f)
-                break
-            except json.JSONDecodeError:
-                pass
-    
-    # Environment variables override
+    # Environment variables
     env_vars = {
         "directory": "LFO_DIRECTORY",
         "model": "LFO_MODEL",
         "api_key": "LFO_API_KEY"
     }
+    
+    # Load from environment
+    config = {}
     for key, env in env_vars.items():
-        if key not in config and env in os.environ:
+        if env in os.environ:
             config[key] = os.environ[env]
     
     examples = """
@@ -369,7 +356,6 @@ Examples:
   python main.py -d ~/Downloads -m ollama/gemma3:4b
   python main.py -d ~/Documents/unsorted -m openai/gpt-4o --api-key-env OPENAI_API_KEY
   python main.py -d ~/Pictures -m local/model --port 11434 -c photos,documents,work
-  python main.py --save-config -d ~/Downloads -m ollama/gemma3:4b --prompt "Organize files into folders based on their content rather than type"
     """
     
     parser = argparse.ArgumentParser(
@@ -406,23 +392,16 @@ Examples:
     
     # Output settings
     groups["output"].add_argument("-v", "--verbose", action="store_true", 
-                                 default=config.get("verbose", False), help="Show detailed output")
-    groups["output"].add_argument("--debug", action="store_true", 
-                                 default=config.get("debug", False), help="Enable debug output")
+                                 help="Enable detailed output")
     groups["output"].add_argument("--no-color", action="store_true",
-                                 default=config.get("no_color", False), help="Disable colored output")
+                                 help="Disable colored output")
     
     # Behavior settings
     groups["behavior"].add_argument("--no-cleanup", dest="clean_up", action="store_false",
-                                   default=config.get("clean_up", True), 
+                                   default=True, 
                                    help="Disable cleanup of empty directories")
-    groups["behavior"].add_argument("--dry-run", action="store_true",
-                                   default=config.get("dry_run", False),
-                                   help="Show what would happen without making changes")
     
     # Configuration
-    groups["config"].add_argument("--save-config", action="store_true",
-                                 help="Save settings to ~/.llm_file_organizer.json")
     groups["config"].add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
     
     args = parser.parse_args()
@@ -451,21 +430,8 @@ Examples:
             print("Example: docs,images,videos")
             sys.exit(1)
     
-    # Save config if requested
-    if args.save_config:
-        config_data = {k: v for k, v in vars(args).items() 
-                      if v is not None and k not in ["save_config"]}
-        
-        config_path = os.path.expanduser("~/.llm_file_organizer.json")
-        with open(config_path, "w") as f:
-            json.dump(config_data, f, indent=2)
-        print(f"Configuration saved to {config_path}")
-        
-        if len(sys.argv) == 2:  # Only --save-config was provided
-            sys.exit(0)
-    
     # Remove config args not used by main()
     args_dict = {k: v for k, v in vars(args).items() 
-                if k not in ["save_config", "no_color", "verbose", "dry_run", "version"]}
+                if k not in ["version"]}
     
     main(args_dict)
