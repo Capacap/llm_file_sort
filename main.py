@@ -222,15 +222,15 @@ def main(kw_args):
     files = list_files_with_metadata(kw_args["directory"])
     files = process_files_content(files, kw_args["directory"], kw_args["model"], kw_args["api_key"], kw_args["debug"], console)
     
+    # Map files to directories
+    console.print("\n[bold blue]Generating file mappings...[/]")
+    directory_structure = list_directories(kw_args["directory"])
+
     # Replace directory structure with custom directories if specified
     if "custom_directories" in kw_args and kw_args["custom_directories"]:
         custom_dirs = kw_args["custom_directories"].split()
         directory_structure = custom_dirs
         console.print(f"[green]Replaced directory structure with {len(custom_dirs)} custom directories[/]")
-
-    # Map files to directories
-    console.print("\n[bold blue]Generating file mappings...[/]")
-    directory_structure = list_directories(kw_args["directory"])
 
     # Create relative path mappings
     relative_file_mapping = map_files_to_directories(
