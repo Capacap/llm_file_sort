@@ -220,12 +220,19 @@ def main(kw_args):
     # Load files and generate content summaries
     console.print("\n[bold blue]Generating content summaries...[/]")
     files = list_files_with_metadata(kw_args["directory"])
-    files = process_files_content(files, kw_args["directory"], kw_args["model"], 
-                                  kw_args["api_key"], kw_args["debug"], console)
+    files = process_files_content(files, kw_args["directory"], kw_args["model"], kw_args["api_key"], kw_args["debug"], console)
+    
+    # Replace directory structure with custom directories if specified
+    if "custom_directories" in kw_args and kw_args["custom_directories"]:
+        custom_dirs = kw_args["custom_directories"].split()
+        directory_structure = custom_dirs
+        console.print(f"[green]Replaced directory structure with {len(custom_dirs)} custom directories[/]")
 
     # Map files to directories
     console.print("\n[bold blue]Generating file mappings...[/]")
     directory_structure = list_directories(kw_args["directory"])
+
+    # Create relative path mappings
     relative_file_mapping = map_files_to_directories(
         files, directory_structure, kw_args["model"], kw_args["api_key"], 
         kw_args.get("prompt"), kw_args["debug"], console)
@@ -240,7 +247,6 @@ def main(kw_args):
     # Visualize current and proposed organization
     current_tree = build_file_tree(absolute_file_mapping.keys(), "Current Organization", "yellow", root_dir)
     proposed_tree = build_file_tree(absolute_file_mapping.values(), "Proposed Organization", "green", root_dir)
-    
     console.print(Columns([current_tree, proposed_tree]))
     
     # Check if changes needed
@@ -285,8 +291,9 @@ if __name__ == "__main__":
         "api_key": None,
         "api_key_env": "OPENAI_API_KEY",
         "port": None,
-        "prompt": "Separate all files with text content, image content, and others into different directories",
-        "clean_up": True
+        "prompt": "Separate all files with text content, image content, and others into different directories. Keep the hierarchy as shallow as possible.",
+        "clean_up": True,
+        "custom_directories": "documents images videos audio",
     }
 
     main(args)
