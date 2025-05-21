@@ -235,7 +235,7 @@ def cleanup_empty_dirs(root_dir, console=None):
 
 # --- Main application logic ---
 def main(kw_args):
-    console = Console()
+    console = Console(no_color=kw_args.get("no_color", False))
     try:
         root_dir = os.path.abspath(kw_args["directory"])
         
@@ -256,7 +256,7 @@ def main(kw_args):
         
         # Generate file mappings
         console.print("\n[bold blue]Generating file mappings...[/]")
-        directory_structure = kw_args["custom_directories"].split() if "custom_directories" in kw_args and kw_args["custom_directories"] else list_directories(kw_args["directory"])
+        directory_structure = kw_args["custom_directories"].split(",") if "custom_directories" in kw_args and kw_args["custom_directories"] else list_directories(kw_args["directory"])
         
         if "custom_directories" in kw_args and kw_args["custom_directories"]:
             console.print(f"[green]Using {len(directory_structure)} custom directories[/]")
@@ -300,6 +300,11 @@ def main(kw_args):
             console.print("\n[bold green]No file organization changes needed.[/]")
             return
             
+        # Handle dry run mode
+        if kw_args.get("dry_run", False):
+            console.print("\n[bold yellow]Dry run mode - no changes will be made.[/]")
+            return
+
         # Get confirmation and apply changes
         if console.input("\n[bold cyan]Apply changes? (y/n): [/]").lower() != "y":
             console.print("[yellow]Operation canceled.[/]")
@@ -340,19 +345,125 @@ def main(kw_args):
         sys.exit(1)
 
 if __name__ == "__main__":
-    import argparse
+    import argparse, os, json, sys
+    from pathlib import Path
     
-    parser = argparse.ArgumentParser(description="ML-powered file organization tool")
-    parser.add_argument("-d", "--directory", default="data/testing", help="Directory to organize")
-    parser.add_argument("-m", "--model", default="ollama/gemma3:4b", help="AI model to use")
-    parser.add_argument("-c", "--custom-directories", help="Space-separated list of custom directories")
-    parser.add_argument("-p", "--prompt", help="Custom prompt for file mapping")
-    parser.add_argument("--debug", action="store_true", help="Enable debug output")
-    parser.add_argument("--api-key", help="API key for the model")
-    parser.add_argument("--api-key-env", help="Environment variable containing the API key")
-    parser.add_argument("--port", type=int, help="Port for local model server")
-    parser.add_argument("--no-cleanup", dest="clean_up", action="store_false", help="Disable cleanup of empty directories")
-    parser.set_defaults(clean_up=True)
+    VERSION = "1.0.0"
     
-    args = vars(parser.parse_args())
-    main(args)
+    # Load config from file or environment
+    config = {}
+    for path in [os.path.expanduser("~/.llm_file_organizer.json"), ".llm_file_organizer.json"]:
+        if os.path.exists(path):
+            try:
+                with open(path) as f:
+                    config = json.load(f)
+                break
+            except json.JSONDecodeError:
+                pass
+    
+    # Environment variables override
+    env_vars = {
+        "directory": "LFO_DIRECTORY",
+        "model": "LFO_MODEL",
+        "api_key": "LFO_API_KEY"
+    }
+    for key, env in env_vars.items():
+        if key not in config and env in os.environ:
+            config[key] = os.environ[env]
+    
+    examples = """
+Examples:
+  python main.py -d ~/Downloads -m ollama/gemma3:4b
+  python main.py -d ~/Documents/unsorted -m openai/gpt-4o --api-key-env OPENAI_API_KEY
+  python main.py -d ~/Pictures -m local/model --port 11434 -c photos,documents,work
+  python main.py --save-config -d ~/Downloads -m ollama/gemma3:4b --prompt "Organize files into folders based on their content rather than type"
+    """
+    
+    parser = argparse.ArgumentParser(
+        description="ML-powered file organization tool",
+        epilog=examples,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    
+    # Core arguments
+    parser.add_argument("-d", "--directory", default=config.get("directory"),
+                        help="(Required) Directory to organize")
+    parser.add_argument("-m", "--model", default=config.get("model"),
+                        help="(Required) AI model to use")
+    parser.add_argument("-c", "--custom-directories", default=config.get("custom_directories"),
+                        help="(Optional) Comma-separated list of directories")
+    parser.add_argument("-p", "--prompt", default=config.get("prompt"),
+                        help="(Optional) Additional instructions for the AI")
+    
+    # Argument groups
+    groups = {
+        "api": parser.add_argument_group("API Settings"),
+        "output": parser.add_argument_group("Output Settings"),
+        "behavior": parser.add_argument_group("Behavior Settings"),
+        "config": parser.add_argument_group("Configuration")
+    }
+    
+    # API settings
+    groups["api"].add_argument("--api-key", default=config.get("api_key"), 
+                              help="API key for the model")
+    groups["api"].add_argument("--api-key-env", default=config.get("api_key_env"),
+                              help="Environment variable with API key")
+    groups["api"].add_argument("--port", type=int, default=config.get("port"),
+                              help="Port for local model server")
+    
+    # Output settings
+    groups["output"].add_argument("-v", "--verbose", action="store_true", 
+                                 default=config.get("verbose", False), help="Show detailed output")
+    groups["output"].add_argument("--debug", action="store_true", 
+                                 default=config.get("debug", False), help="Enable debug output")
+    groups["output"].add_argument("--no-color", action="store_true",
+                                 default=config.get("no_color", False), help="Disable colored output")
+    
+    # Behavior settings
+    groups["behavior"].add_argument("--no-cleanup", dest="clean_up", action="store_false",
+                                   default=config.get("clean_up", True), 
+                                   help="Disable cleanup of empty directories")
+    groups["behavior"].add_argument("--dry-run", action="store_true",
+                                   default=config.get("dry_run", False),
+                                   help="Show what would happen without making changes")
+    
+    # Configuration
+    groups["config"].add_argument("--save-config", action="store_true",
+                                 help="Save settings to ~/.llm_file_organizer.json")
+    groups["config"].add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
+    
+    args = parser.parse_args()
+    
+    # Validate required arguments
+    if not all([args.directory, args.model]):
+        missing = []
+        if not args.directory: missing.append("directory (-d/--directory)")
+        if not args.model: missing.append("model (-m/--model)")
+        print(f"Error: Missing required arguments: {', '.join(missing)}")
+        print(f"Run '{sys.argv[0]} --help' for usage information")
+        sys.exit(1)
+    
+    # Validate and expand directory path
+    args.directory = os.path.abspath(os.path.expanduser(args.directory))
+    if not os.path.exists(args.directory):
+        print(f"Error: Directory not found: {args.directory}")
+        sys.exit(1)
+    
+    # Save config if requested
+    if args.save_config:
+        config_data = {k: v for k, v in vars(args).items() 
+                      if v is not None and k not in ["save_config"]}
+        
+        config_path = os.path.expanduser("~/.llm_file_organizer.json")
+        with open(config_path, "w") as f:
+            json.dump(config_data, f, indent=2)
+        print(f"Configuration saved to {config_path}")
+        
+        if len(sys.argv) == 2:  # Only --save-config was provided
+            sys.exit(0)
+    
+    # Remove config args not used by main()
+    args_dict = {k: v for k, v in vars(args).items() 
+                if k not in ["save_config", "no_color", "verbose", "dry_run", "version"]}
+    
+    main(args_dict)
