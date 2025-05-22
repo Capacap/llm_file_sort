@@ -10,7 +10,8 @@ from rich.panel import Panel
 from src.file_utils import list_files_with_metadata, extract_text_content, encode_image_content, list_directories
 from src.ai_utils import (
     ai_generate_image_caption, ai_generate_text_summary, ai_map_file_to_directory,
-    AIUtilsError, ImageProcessingError, TextProcessingError, MappingError, ModelConnectionError
+    AIUtilsError, ImageProcessingError, TextProcessingError, MappingError, ModelConnectionError,
+    DirectoryGenerationError, ai_generate_directory_structure
 )
 
 def validate_file_mapping(mapping):
@@ -249,10 +250,35 @@ def main(kw_args):
         
         # Generate file mappings
         console.print("\n[bold blue]Generating file mappings...[/]")
-        directory_structure = kw_args["custom_directories"].split(",") if "custom_directories" in kw_args and kw_args["custom_directories"] else list_directories(kw_args["directory"])
-        
-        if "custom_directories" in kw_args and kw_args["custom_directories"]:
-            console.print(f"[green]Using {len(directory_structure)} custom directories[/]")
+        directory_structure = []
+        if kw_args.get("custom_directories"):
+            directory_structure = kw_args["custom_directories"].split(",")
+            console.print(f"[green]Using {len(directory_structure)} custom directories for mapping.[/]")
+        else:
+            console.print("[blue]No custom directories provided. Attempting to generate directory structure with AI...[/]")
+            try:
+                directory_structure = ai_generate_directory_structure(
+                    files, kw_args["model"], kw_args["api_key"],
+                    port=kw_args.get("port"), debug=kw_args["verbose"]
+                )
+                if directory_structure:
+                    console.print(f"[green]AI generated {len(directory_structure)} directories for mapping:[/]")
+                    if kw_args["verbose"]:
+                        for d_path in directory_structure:
+                            console.print(f"[green]  - {d_path}[/]")
+                else: # Should not happen if ai_generate_directory_structure works as expected
+                    console.print("[yellow]AI did not generate any directories. Falling back to existing directory structure.[/]")
+                    directory_structure = list_directories(kw_args["directory"])
+                    console.print(f"[blue]Using {len(directory_structure)} existing directories for mapping.[/]")
+            except DirectoryGenerationError as e:
+                console.print(f"[yellow]Warning: AI failed to generate directory structure: {str(e)}[/]")
+                console.print("[blue]Falling back to existing directory structure.[/]")
+                directory_structure = list_directories(kw_args["directory"])
+                console.print(f"[blue]Using {len(directory_structure)} existing directories for mapping.[/]")
+
+        if not directory_structure: # Final fallback if all else fails (e.g. root_dir is empty)
+            console.print("[yellow]No directory structure available (custom, AI-generated, or existing). Using root directory as the only option.[/]")
+            directory_structure = ["/"]
 
         # Map files to directories
         relative_file_mapping = map_files_to_directories(

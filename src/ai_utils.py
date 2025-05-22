@@ -18,6 +18,7 @@ class ImageProcessingError(AIUtilsError): """Exception raised for errors during 
 class TextProcessingError(AIUtilsError): """Exception raised for errors during text processing."""
 class MappingError(AIUtilsError): """Exception raised for errors during file mapping."""
 class ModelConnectionError(AIUtilsError): """Exception raised for errors connecting to the model API."""
+class DirectoryGenerationError(AIUtilsError): """Exception raised for errors during AI directory structure generation."""
 
 def _handle_api_exceptions(e, retries, max_retries, retry_delay, debug=False):
     """Handle common API exceptions with retry logic."""
@@ -314,3 +315,136 @@ Important: target_directory MUST be one of the directories from the available di
                 retries += 1
                 continue
             raise AIUtilsError(f"Unexpected error mapping file to directory: {str(e)}")
+
+def ai_generate_directory_structure(files_info, model, api_key, port=None, prompt=None, debug=False, max_retries=2, retry_delay=1):
+    """Generate a directory structure for a list of files using an AI model."""
+    if not isinstance(files_info, list):
+        raise DirectoryGenerationError("Invalid files_info: must be a list of file details")
+
+    retries = 0
+    while True:
+        try:
+            litellm.api_key = api_key
+            litellm.api_base = f"http://localhost:{port}" if port is not None else None
+
+            # To keep the prompt size manageable, we'll only send essential info for each file
+            simplified_files_info = [
+                {
+                    "relative_path": f.get("relative_path"),
+                    "extension": f.get("extension"),
+                    "content_summary": f.get("content_summary", "N/A")
+                }
+                for f in files_info
+            ]
+            
+            files_str = json.dumps(simplified_files_info, indent=2)
+            if len(files_str) > 100000: # Heuristic limit for prompt size
+                 # If too large, send a summary instead
+                extensions_summary = {}
+                for f_info in simplified_files_info:
+                    ext = f_info.get("extension", "unknown")
+                    extensions_summary[ext] = extensions_summary.get(ext, 0) + 1
+                files_representation = {
+                    "total_files": len(simplified_files_info),
+                    "extensions_summary": extensions_summary,
+                    "first_few_files_examples": simplified_files_info[:5] # Show first 5 as examples
+                }
+                files_str = json.dumps(files_representation, indent=2)
+                prompt_info_source = "file summary (due to large number of files)"
+            else:
+                prompt_info_source = "full file list"
+
+
+            system_prompt = """You are an AI assistant that specializes in creating optimal directory structures for organizing files.
+Based on the provided list of files (including their paths, types, and content summaries), generate a concise and logical list of directory paths.
+The directory paths should be suitable for organizing the given files.
+Output JSON with exactly this format:
+```json
+{
+  "directory_paths": ["/path/to/dir1", "/another/path/dir2", "/top_level_dir"]
+}
+```
+The paths should start with a '/' and represent a relative structure from a common root.
+Aim for a manageable number of top-level directories, and use subdirectories where appropriate for better organization.
+Consider common organizational patterns (e.g., by project, by file type, by date, by topic).
+Ensure directory paths are valid and do not contain invalid characters.
+The list should not be empty if files are present.
+"""
+            
+            user_content = f"""## File Information ({prompt_info_source})
+```json
+{files_str}
+```
+
+## Task
+Analyze the files listed (or summarized) above and propose a hierarchical directory structure to organize them effectively.
+Provide the directory structure as a JSON list of strings, where each string is a directory path. Each path must start with '/'.
+
+## Example Output Format
+```json
+{{
+  "directory_paths": ["/Images/Animals", "/Documents/Work/Reports", "/Projects/Alpha/SourceCode"]
+}}
+```
+
+## Instructions
+Generate the `directory_paths` list. Ensure the output is valid JSON in the specified format and that the list is not empty if files were provided.
+"""
+            if prompt:
+                user_content += f"""
+## Additional Guidelines
+{prompt}
+"""
+
+            user_content += """
+## Instructions
+Generate the `directory_paths` list. Ensure the output is valid JSON in the specified format and that the list is not empty if files were provided.
+"""
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content}
+            ]
+            
+            if debug:
+                print(f"\n=== Directory Structure Generation Request ===\nModel: {model}\n"
+                      f"API Base: {litellm.api_base if port is not None else 'default'}\n"
+                      f"System: {messages[0]['content']}\\nUser content based on: {prompt_info_source}")
+                if len(files_str) < 2000: # Only print if not excessively long
+                    print(f"User files data: {files_str}")
+
+            response = litellm.completion(
+                model=model,
+                messages=messages,
+                response_format={"type": "json_object"}
+            )
+            
+            if debug:
+                print(f"Response: {response.choices[0].message.content}\n======================================\n")
+            
+            try:
+                response_json = json.loads(response.choices[0].message.content)
+                
+                if "directory_paths" not in response_json:
+                    raise DirectoryGenerationError("Response missing 'directory_paths' field")
+                
+                dir_paths = response_json["directory_paths"]
+                if not isinstance(dir_paths, list) or not all(isinstance(p, str) and p.startswith('/') for p in dir_paths):
+                    raise DirectoryGenerationError("Invalid 'directory_paths' format: must be a list of strings starting with '/'")
+                
+                if not dir_paths and files_info: # If files were provided, expect some directories
+                    raise DirectoryGenerationError("AI returned an empty list of directories.")
+
+                return dir_paths
+            except json.JSONDecodeError:
+                raise DirectoryGenerationError("Failed to parse model response as JSON")
+            except DirectoryGenerationError as e: # Re-raise specific errors
+                if debug: print(f"DirectoryGenerationError: {str(e)}")
+                raise e
+
+        except Exception as e:
+            if isinstance(e, DirectoryGenerationError): # Propagate if already handled
+                raise e
+            if _handle_api_exceptions(e, retries, max_retries, retry_delay, debug):
+                retries += 1
+                continue
+            raise AIUtilsError(f"Unexpected error generating directory structure: {str(e)}")
