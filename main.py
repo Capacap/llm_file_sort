@@ -309,6 +309,7 @@ def main(kw_args):
         has_issues = display_validation_issues(validation, console)
         
         # Visualize current and proposed organization
+        console.print("\n[bold blue]Visualizing file organization...[/]")
         current_tree = build_file_tree(absolute_file_mapping.keys(), "Current Organization", "yellow", root_dir)
         proposed_tree = build_file_tree(absolute_file_mapping.values(), "Proposed Organization", "green", root_dir)
         console.print(Columns([current_tree, proposed_tree]))

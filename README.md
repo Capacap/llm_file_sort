@@ -61,38 +61,33 @@ python main.py -d ~/Pictures -m local/model --port 11434 -c photos,documents,wor
 
 ## Example Run
 ```bash
-python3 main.py -d ~/Downloads -c cats,dogs,robots -m openai/gpt-4.1-nano --api-key-env OPENAI_API_KEY
+py main.py -d ~/Downloads -p "Create dirs for robots, cats, and dogs separatly" --model openai/gpt-4.1-mini --api-key-env OPENAI_API_KEY
 
 Generating content summaries...
   100% - 239424fba61197893d898c5223ea6d3c.jpg
 
 Generating file mappings...
-Using 3 custom directories
+No custom directories provided. Attempting to generate directory structure with AI...
+AI generated 3 directories for mapping:
   100% - 239424fba61197893d898c5223ea6d3c.jpg
 
 Validating file mapping...
 ✓ File mapping validation successful!
 
-Current Organization: Downloads             
-├── 97d3256c38a8cb7bfda0b21e67d15d72.jpg    
-├── d5b2d5ad21dbc827fe1255098ef085fa.jpg    
-├── ea18927ba4a8064856762d7b266767b5.jpg    
-├── ab40844dca96aa27b7e8ebe7edeee22e.jpg    
-├── f921181b1ee259a1303db879e1a3593f.jpg    
-├── affcac4e345f82968eab52dc2b5b3399.jpg    
-└── 239424fba61197893d898c5223ea6d3c.jpg
-    
-Proposed Organization: Downloads            
-├── cats/                                   
-│   ├── d5b2d5ad21dbc827fe1255098ef085fa.jpg
-│   └── affcac4e345f82968eab52dc2b5b3399.jpg
-├── dogs/                                   
-│   ├── ea18927ba4a8064856762d7b266767b5.jpg
-│   └── 239424fba61197893d898c5223ea6d3c.jpg
-└── robots/                                 
-    ├── 97d3256c38a8cb7bfda0b21e67d15d72.jpg
-    ├── ab40844dca96aa27b7e8ebe7edeee22e.jpg
-    └── f921181b1ee259a1303db879e1a3593f.jpg
+Visualizing file organization...
+Current Organization: Downloads          Proposed Organization: Downloads                    
+├── 97d3256c38a8cb7bfda0b21e67d15d72.jpg └── Images/                                         
+├── d5b2d5ad21dbc827fe1255098ef085fa.jpg     ├── Animals/                                    
+├── ea18927ba4a8064856762d7b266767b5.jpg     │   ├── Cats/                                   
+├── ab40844dca96aa27b7e8ebe7edeee22e.jpg     │   │   ├── d5b2d5ad21dbc827fe1255098ef085fa.jpg
+├── f921181b1ee259a1303db879e1a3593f.jpg     │   │   └── affcac4e345f82968eab52dc2b5b3399.jpg
+├── affcac4e345f82968eab52dc2b5b3399.jpg     │   └── Dogs/                                   
+└── 239424fba61197893d898c5223ea6d3c.jpg     │       ├── ea18927ba4a8064856762d7b266767b5.jpg
+                                             │       └── 239424fba61197893d898c5223ea6d3c.jpg
+                                             └── Robots/                                     
+                                                 ├── 97d3256c38a8cb7bfda0b21e67d15d72.jpg    
+                                                 ├── ab40844dca96aa27b7e8ebe7edeee22e.jpg    
+                                                 └── f921181b1ee259a1303db879e1a3593f.jpg    
 
 Apply changes? (y/n): y
 
@@ -105,7 +100,6 @@ Files skipped: 0
 
 Cleaning up empty directories...
 Removed 0 empty directories
-
 ```
 
 ## License
